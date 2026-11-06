@@ -1,4 +1,4 @@
-<!doctype html>
+<!doctype html><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SmartPI synthetic browser validation</title>
 <style>body{margin:0} :root{--primary-background-color:#fafafa;--primary-text-color:#212121;--secondary-text-color:#555;--card-background-color:white;--divider-color:#ccc;--primary-color:#1976d2}
@@ -6,11 +6,11 @@
 <script type="module">
 import '../../custom_components/smartpi_dashboard/frontend/smartpi-dashboard.js';
 const panel=document.createElement('smartpi-dashboard-panel');document.body.append(panel);
-const make=(name,mode)=>({entity_id:'sensor.'+name,state:'stable',attributes:{schema_version:2,friendly_name:name,live:{control:{mode,phase:mode==='hysteresis'?'Hysteresis':'Stable'},temperature:{indoor:19},setpoint:{filtered_setpoint:20},power:{applied_percent:100,pi_percent:0,ff_percent:0},model:{tau_min:9999,tau_reliable:false},learning:{stage:mode==='hysteresis'?'bootstrap':'learning'},analysis:{twin:{twin_T_pred:120,twin_model_reliable:false}}},history:{}}});
+const make=(name,mode)=>({entity_id:'sensor.'+name,state:'stable',last_updated:new Date().toISOString(),attributes:{schema_version:2,friendly_name:name,live:{control:{mode,phase:mode==='hysteresis'?'Hysteresis':'Stable'},temperature:{indoor:19},setpoint:{filtered_setpoint:20},power:{applied_percent:100,pi_percent:0,ff_percent:0},model:{tau_min:9999,tau_reliable:false},learning:{stage:mode==='hysteresis'?'bootstrap':'learning'},analysis:{twin:{twin_T_pred:120,twin_model_reliable:false}}},history:{}}});
 let writes=0;
 const forbidden=()=>{writes++;throw Error('Forbidden HA write or request')};
 const states={'sensor.one':make('one','hysteresis'),'sensor.two':make('two','smartpi')};
-const hass={states,callService:forbidden,callApi:forbidden,callWS:forbidden};
+const hass={states,callService:forbidden,callApi:forbidden};
 panel.hass=hass; await panel.updateComplete;
 const first=panel.shadowRoot.textContent;
 panel.shadowRoot.querySelectorAll('button')[1].click();await panel.updateComplete;

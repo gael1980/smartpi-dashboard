@@ -31,6 +31,18 @@ jobs:
         run: python3 -m unittest discover -s tests -v
       - name: Verify committed bundle matches sources
         run: git diff --exit-code -- frontend/package-lock.json custom_components/smartpi_dashboard/frontend/smartpi-dashboard.js
+      - name: Browser interaction tests (synthetic data only)
+        run: |
+          python3 -m http.server 8765 --bind 127.0.0.1 > /tmp/smartpi-http.log 2>&1 &
+          google-chrome --headless=new --no-sandbox --disable-gpu --user-data-dir=/tmp/smartpi-chrome --remote-debugging-port=9224 about:blank > /tmp/smartpi-chrome.log 2>&1 &
+          SMARTPI_BROWSER_OUTPUT=/tmp/smartpi-browser-evidence node frontend/tests/browser-runner.mjs
+      - name: Upload browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smartpi-browser-evidence
+          path: /tmp/smartpi-browser-evidence/
+          if-no-files-found: warn
       - name: Upload installable integration
         uses: actions/upload-artifact@v4
         with:

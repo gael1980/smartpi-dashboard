@@ -32,12 +32,12 @@ class LifecycleTests(unittest.IsolatedAsyncioTestCase):
         from homeassistant.components.frontend import DATA_PANELS
         from custom_components.smartpi_dashboard import async_setup_entry, async_unload_entry
         from custom_components.smartpi_dashboard.const import PANEL_URL_PATH
-        with patch('custom_components.smartpi_dashboard.async_get_integration', AsyncMock(return_value=SimpleNamespace(version='0.1.0'))):
+        with patch('custom_components.smartpi_dashboard.async_get_integration', AsyncMock(return_value=SimpleNamespace(version='0.2.0'))):
             for _ in range(2):
                 self.assertTrue(await async_setup_entry(self.hass, None))
                 panel = self.hass.data[DATA_PANELS][PANEL_URL_PATH]
                 self.assertTrue(panel.require_admin)
-                self.assertIn('smartpi-dashboard.js?v=0.1.0', panel.config['_panel_custom']['module_url'])
+                self.assertIn('smartpi-dashboard.js?v=0.2.0', panel.config['_panel_custom']['module_url'])
                 self.assertTrue(await async_unload_entry(self.hass, None))
                 self.assertNotIn(PANEL_URL_PATH, self.hass.data[DATA_PANELS])
         self.http.async_register_static_paths.assert_awaited_once()

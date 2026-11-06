@@ -1,15 +1,16 @@
 {
   "name": "smartpi-dashboard-frontend",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "scripts": {
-    "build": "esbuild src/main.ts --bundle --format=esm --target=es2022 --minify --outfile=../custom_components/smartpi_dashboard/frontend/smartpi-dashboard.js",
+    "build": "esbuild src/main.ts --bundle --format=esm --target=es2022 --minify --loader:.css=text --outfile=../custom_components/smartpi_dashboard/frontend/smartpi-dashboard.js",
     "typecheck": "tsc --noEmit",
-    "test": "esbuild src/adapter.ts --bundle --platform=node --format=esm --target=node22 --outfile=.build-tests/adapter.mjs && node --test tests/*.test.mjs"
+    "test": "esbuild src/adapter.ts src/utils/timeseries.ts src/utils/control.ts src/services/history.ts --bundle --platform=node --format=esm --target=node22 --outdir=.build-tests --out-extension:.js=.mjs && node --test tests/*.test.mjs"
   },
   "dependencies": {
-    "lit": "3.3.1"
+    "lit": "3.3.1",
+    "uplot": "1.6.32"
   },
   "devDependencies": {
     "esbuild": "0.25.10",
