@@ -1,0 +1,2 @@
+# esbuild preserves significant whitespace inside Lit's template literals.
+custom_components/smartpi_dashboard/frontend/smartpi-dashboard.js -whitespace
