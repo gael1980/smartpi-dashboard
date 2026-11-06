@@ -1,0 +1,14 @@
+{
+  "title": "SmartPI Dashboard",
+  "config": {
+    "step": {
+      "user": {
+        "title": "SmartPI Dashboard",
+        "description": "Installer le tableau de bord SmartPI en lecture seule ?"
+      }
+    },
+    "abort": {
+      "single_instance_allowed": "Le tableau de bord SmartPI est déjà configuré."
+    }
+  }
+}
