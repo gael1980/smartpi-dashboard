@@ -25,6 +25,7 @@ async def async_register_panel(hass: HomeAssistant, version: str) -> None:
         sidebar_icon="mdi:chart-timeline-variant",
         require_admin=True,
         config={},
+        config_panel_domain=DOMAIN,
     )
 
 
