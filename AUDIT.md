@@ -1,5 +1,9 @@
 # Audit SmartPI Dashboard 0.1.0 — 6 novembre 2026
 
+> Rapport historique de la version 0.1. Pour la version 0.2, voir
+> [VISUAL_DIAGNOSTICS.md](VISUAL_DIAGNOSTICS.md). La récupération Recorder
+> a depuis été validée avec la session authentifiée du navigateur.
+
 Audit v1, base `1a3ef7dbc9126bf1de0feaba8daefdcd00c471c7`, branche
 `audit/pre-installation`. Dépôt privé, installation manuelle uniquement.
 
