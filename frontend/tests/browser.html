@@ -1,0 +1,23 @@
+<!doctype html>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SmartPI synthetic browser validation</title>
+<style>body{margin:0} :root{--primary-background-color:#fafafa;--primary-text-color:#212121;--secondary-text-color:#555;--card-background-color:white;--divider-color:#ccc;--primary-color:#1976d2}
+@media(prefers-color-scheme:dark){:root{--primary-background-color:#111;--primary-text-color:#eee;--secondary-text-color:#bbb;--card-background-color:#222;--divider-color:#555;--primary-color:#64b5f6}}</style>
+<script type="module">
+import '../../custom_components/smartpi_dashboard/frontend/smartpi-dashboard.js';
+const panel=document.createElement('smartpi-dashboard-panel');document.body.append(panel);
+const make=(name,mode)=>({entity_id:'sensor.'+name,state:'stable',attributes:{schema_version:2,friendly_name:name,live:{control:{mode,phase:mode==='hysteresis'?'Hysteresis':'Stable'},temperature:{indoor:19},setpoint:{filtered_setpoint:20},power:{applied_percent:100,pi_percent:0,ff_percent:0},model:{tau_min:9999,tau_reliable:false},learning:{stage:mode==='hysteresis'?'bootstrap':'learning'},analysis:{twin:{twin_T_pred:120,twin_model_reliable:false}}},history:{}}});
+let writes=0;
+const forbidden=()=>{writes++;throw Error('Forbidden HA write or request')};
+const states={'sensor.one':make('one','hysteresis'),'sensor.two':make('two','smartpi')};
+const hass={states,callService:forbidden,callApi:forbidden,callWS:forbidden};
+panel.hass=hass; await panel.updateComplete;
+const first=panel.shadowRoot.textContent;
+panel.shadowRoot.querySelectorAll('button')[1].click();await panel.updateComplete;
+const navigated=panel.shadowRoot.querySelector('.hero h2').textContent==='two';
+panel.hass={...hass,states:{...states,'sensor.two':{...states['sensor.two'],state:'unavailable'}}};await panel.updateComplete;
+const unavailable=panel.shadowRoot.textContent.includes('Capteur indisponible');
+panel.remove();document.body.append(panel);await panel.updateComplete;
+window.auditResult={bootstrap:first.includes('ne prouve pas une anomalie'),navigated,unavailable,writes,maskedPrediction:!first.includes('120 °C')};
+console.assert(Object.values(window.auditResult).every(v=>v===true||v===0),'Browser checks',window.auditResult);
+</script>

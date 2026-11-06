@@ -1,6 +1,6 @@
 import {LitElement, html, css, nothing} from "lit";
 import {customElement, property, state} from "lit/decorators.js";
-import {discover, display, at, num, inBootstrap, explanations, type HassLike, type SmartPIDiagnostic} from "./adapter";
+import {discover, reliableValue, display, at, num, inBootstrap, explanations, type HassLike, type SmartPIDiagnostic} from "./adapter";
 
 type Field = {label: string, path: string, unit?: string, digits?: number, reliable?: string};
 type Section = {title: string, note: string, fields: Field[]};
@@ -24,15 +24,15 @@ const sections: Section[] = [
     {label:"Bande morte",path:"control.in_deadband"},
     {label:"Proche consigne",path:"control.in_near_band"},
   ]},
-  {title: "Modèle thermique A / B", note: "Le modèle 1R1C est appris ; sa fiabilité est distincte de la valeur affichée.", fields: [
+  {title: "Modèle thermique A / B", note: "Le modèle 1R1C est appris (A : °C/min à commande unitaire ; B : min⁻¹) ; sa fiabilité est distincte de la valeur affichée.", fields: [
     {label:"Gain de chauffe A",path:"model.a",digits:6},
     {label:"Pertes B",path:"model.b",digits:6},
     {label:"Confiance A/B",path:"model.confidence"},
     {label:"Constante τ",path:"model.tau_min",unit:" min",reliable:"model.tau_reliable"},
     {label:"Fiabilité τ",path:"model.tau_reliable"},
-    {label:"Temps mort de chauffe",path:"model.deadtime_heat_s",unit:" s",digits:0},
+    {label:"Temps mort de chauffe",path:"model.deadtime_heat_s",unit:" s",digits:0,reliable:"model.deadtime_heat_reliable"},
     {label:"Fiabilité chauffe",path:"model.deadtime_heat_reliable"},
-    {label:"Temps mort de refroidissement",path:"model.deadtime_cool_s",unit:" s",digits:0},
+    {label:"Temps mort de refroidissement",path:"model.deadtime_cool_s",unit:" s",digits:0,reliable:"model.deadtime_cool_reliable"},
     {label:"Fiabilité refroidissement",path:"model.deadtime_cool_reliable"},
     {label:"Stabilité A",path:"model.a_stability_ratio",digits:3},
     {label:"Stabilité B",path:"model.b_stability_ratio",digits:3},
@@ -59,7 +59,7 @@ const sections: Section[] = [
     {label:"Délai de réponse",path:"analysis.learning.response_lag.lag_s",unit:" s",digits:0},
     {label:"Motif délai",path:"analysis.learning.response_lag.last_reason"},
   ]},
-  {title: "Feedforward FF1 / FF2 / FF3", note: "Comprendre chaque contribution et le refus éventuel d'une correction.", fields: [
+  {title: "Feedforward FF1 / FF2 / FF3", note: "Les contributions u_ff sont des ratios (1 = 100 % de commande), pas des watts. Comprendre le refus éventuel d’une correction.", fields: [
     {label:"État FF3",path:"feedforward.ff3_status"},
     {label:"Raison FF",path:"analysis.feedforward.reason"},
     {label:"FF1",path:"analysis.feedforward.u_ff1",digits:6},
@@ -84,7 +84,7 @@ const sections: Section[] = [
     {label:"RMSE 30",path:"analysis.twin.twin_rmse_30",unit:" °C",digits:4},
     {label:"Équilibre estimé",path:"analysis.twin.twin_T_steady",unit:" °C",reliable:"analysis.twin.twin_T_steady_reliable"},
     {label:"Fiabilité équilibre",path:"analysis.twin.twin_T_steady_reliable"},
-    {label:"Consigne atteignable",path:"analysis.twin.twin_setpoint_reachable"},
+    {label:"Consigne atteignable (prédiction)",path:"analysis.twin.twin_setpoint_reachable",reliable:"analysis.twin.twin_T_steady_reliable"},
     {label:"ETA",path:"analysis.twin.eta_s",unit:" s",digits:0},
     {label:"Motif ETA",path:"analysis.twin.eta_reason"},
   ]},
@@ -123,9 +123,7 @@ export class SmartPIDashboardPanel extends LitElement {
   }
 
   private field(f: Field, live: Record<string, unknown>) {
-    const reliable = f.reliable ? at(live, f.reliable) : undefined;
-    const value = reliable === false ? "Non fiable (valeur brute : " + display(at(live,f.path),f.unit??"",f.digits??2) + ")" :
-      display(at(live,f.path),f.unit??"",f.digits??2);
+    const value = display(reliableValue(live, f.path, f.reliable), f.unit ?? "", f.digits ?? 2);
     return html`<div class="detail" title=${f.path}><span>${f.label}</span><strong>${value}</strong></div>`;
   }
 
@@ -141,6 +139,7 @@ export class SmartPIDashboardPanel extends LitElement {
             <div class="muted small">${d.climateId ?? d.entityId}</div></div>
           <span class="tag">${bootstrap?"Apprentissage / hystérésis":display(at(v,"control.phase"))}</span>
         </div>
+        <p class="muted small">État : ${d.state} · Dernière publication : ${d.lastUpdated ?? "Indisponible"}. Une publication ancienne ne prouve pas une panne.</p>
         <div class="metrics">
           ${this.metric("Température intérieure",at(v,"temperature.indoor")," °C")}
           ${this.metric("Consigne filtrée",at(v,"setpoint.filtered_setpoint")," °C")}
@@ -180,7 +179,7 @@ export class SmartPIDashboardPanel extends LitElement {
         <pre>${JSON.stringify({schema_version:2,state:d.state,live:d.live,history:d.history},null,2)}</pre>
       </details>
       <section class="surface soon"><h3>Historique Recorder</h3>
-        <p>Les 8 séries du contrat v2 sont reconnues. Les courbes 24–48 h et les annotations sont prévues après validation de cette première version. Aucune courbe n’est inventée à partir d’un simple instantané.</p>
+        <p>Le contrat v2 définit 8 séries historiques ; leur disponibilité dans Recorder doit être vérifiée sur chaque installation. Les courbes 24–48 h et les annotations sont prévues après validation de cette première version. Aucune courbe n’est inventée à partir d’un simple instantané.</p>
       </section>
     `;
   }
@@ -223,6 +222,8 @@ export class SmartPIDashboardPanel extends LitElement {
     .tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px;margin-bottom:20px}
     .tile{background:var(--card-background-color);color:inherit;border:1px solid var(--divider-color);border-radius:14px;
       min-height:150px;padding:16px;text-align:left;cursor:pointer;display:flex;flex-direction:column;gap:8px}
+    button:focus-visible,summary:focus-visible{outline:3px solid var(--primary-color);outline-offset:3px}
+    .tile{overflow-wrap:anywhere;min-width:0}
     .tile:hover{border-color:var(--primary-color)}.tile.selected{outline:2px solid var(--primary-color);outline-offset:-2px}
     .big{font-size:27px;font-weight:700}.tile-bottom{display:flex;justify-content:space-between;gap:7px;font-size:12px;margin-top:auto}
     .hero,.surface{background:var(--card-background-color);border:1px solid var(--divider-color);border-radius:14px}

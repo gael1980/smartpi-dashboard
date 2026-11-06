@@ -13,6 +13,7 @@ export interface SmartPIDiagnostic {
   name: string;
   state: string;
   lastUpdated: string | null;
+  available: boolean;
   live: Rec;
   history: Rec;
 }
@@ -36,17 +37,20 @@ export function display(value: unknown, unit = "", digits = 2): string {
 export function inBootstrap(d: SmartPIDiagnostic): boolean {
   return at(d.live, "control.mode") === "hysteresis" || at(d.live, "learning.stage") === "bootstrap";
 }
+export function reliableValue(live: Rec, path: string, reliability?: string): unknown {
+  if (reliability && at(live, reliability) !== true) return undefined;
+  if (path.startsWith("analysis.twin.") && !path.endsWith("reliable")) {
+    if (at(live, "analysis.twin.twin_model_reliable") !== true ||
+        at(live, "analysis.twin.twin_warming_up") !== false) return undefined;
+  }
+  return at(live, path);
+}
 function matchingClimate(hass: HassLike, entityId: string): HAState | null {
   const explicit = Object.values(hass.states).find(s =>
     s.entity_id.startsWith("climate.") &&
     at(s.attributes, "specific_states.regulation_diagnostics") === entityId
   );
-  if (explicit) return explicit;
-  const suffix = "_smartpi_diagnostics";
-  if (!entityId.startsWith("sensor.") || !entityId.endsWith(suffix)) return null;
-  const slug = entityId.slice("sensor.".length, -suffix.length);
-  const candidate = hass.states["climate." + slug];
-  return candidate?.entity_id.startsWith("climate.") ? candidate : null;
+  return explicit ?? null;
 }
 export function discover(hass: HassLike | null | undefined): SmartPIDiagnostic[] {
   if (!hass || !record(hass.states)) return [];
@@ -55,7 +59,6 @@ export function discover(hass: HassLike | null | undefined): SmartPIDiagnostic[]
     if (!sensor?.entity_id?.startsWith("sensor.") || !record(sensor.attributes)) continue;
     const a = sensor.attributes;
     if (a.schema_version !== 2 || !record(a.live) || !record(a.history)) continue;
-    if (!record(a.live.control) || !record(a.live.power) || !record(a.live.model)) continue;
     const climate = matchingClimate(hass, sensor.entity_id);
     const fname = typeof a.friendly_name === "string" ? a.friendly_name : sensor.entity_id;
     const fallback = fname.replace(/ SmartPI Diagnostics$/i, "");
@@ -63,13 +66,16 @@ export function discover(hass: HassLike | null | undefined): SmartPIDiagnostic[]
       entityId: sensor.entity_id, climateId: climate?.entity_id ?? null,
       name: typeof climate?.attributes.friendly_name === "string" ? climate.attributes.friendly_name : fallback,
       state: sensor.state, lastUpdated: sensor.last_updated ?? null,
-      live: a.live, history: a.history,
+      available: sensor.state !== "unknown" && sensor.state !== "unavailable",
+      live: sensor.state === "unknown" || sensor.state === "unavailable" ? {} : a.live, history: a.history,
     });
   }
   return result.sort((a, b) => a.name.localeCompare(b.name, "fr"));
 }
 export function explanations(d: SmartPIDiagnostic): string[] {
   const result: string[] = [];
+  if (!d.available) return ["Capteur indisponible : ses anciens attributs ne représentent pas des valeurs actuelles."];
+  result.push("Le modèle A/B reste une estimation apprise ; consulter son état de confiance avant toute interprétation physique.");
   if (inBootstrap(d)) result.push(
     "Apprentissage initial par hystérésis : la commande appliquée ne provient pas nécessairement de la somme PI + FF. Ce décalage ne prouve pas une anomalie."
   );
