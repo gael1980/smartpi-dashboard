@@ -11,8 +11,16 @@ Panneau scientifique **en lecture seule** pour comprendre SmartPI dans Home Assi
 
 ## État du développement
 
-**Prototype 0.1.0** : intégration Home Assistant et adaptateur de diagnostics v2.
-La consultation Recorder (24–48 h), les graphiques historiques et les comparaisons seront ajoutés après validation du socle sur HA.
+**Version 0.2.0** : panneau natif avec graphiques température/consigne, commandes,
+écart filtré et modèle A/B sur 1–48 h. Zoom, déplacement, curseurs synchronisés,
+légende interactive, tables accessibles, schéma logique cliquable et chaîne U.
+Les vues Évolution, Régulation et Santé du modèle proposent un mode expert.
+
+Lecture Recorder via la session authentifiée de Home Assistant ; repli explicite
+sur un historique de session en mémoire si les données sont absentes ou refusées.
+Les diagnostics techniques de la version 0.1 restent accessibles.
+Voir [VISUAL_DIAGNOSTICS.md](VISUAL_DIAGNOSTICS.md) pour les sources, la fidélité
+au code SmartPI, l'architecture et les limites scientifiques.
 
 ## Installation pour un dépôt privé
 
@@ -24,7 +32,7 @@ HACS nécessite des dépôts publics ; tant que le dépôt est privé, compiler 
 4. Ouvrir **SmartPI Dashboard** dans la barre latérale (administrateurs seulement).
 
 La compilation nécessite Node.js 22+. Rien à installer sur le serveur HA après compilation.
-**Cette version n'a pas encore été testée sur ton Home Assistant en fonctionnement.**
+**Recorder a été vérifié en lecture seule sur HA 2026.11.0 ; le nouveau panneau n'a pas été installé sur le HA principal.**
 
 ## Développement
 
@@ -54,8 +62,15 @@ La CI exécute également ce groupe dans un job dédié.
 Pour vérifier le rendu sans HA, servir la racine du dépôt avec un serveur HTTP
 local et ouvrir `frontend/tests/browser.html` : uniquement des données synthétiques,
 aucune connexion à Home Assistant. `window.auditResult` donne les contrôles du scénario.
-Le frontend utilise uniquement les instantanés `hass.states` ; aucun appel réseau
-ou service n'est nécessaire. La liaison climate exige la référence explicite
+Le frontend utilise `hass.states` et une seule commande de lecture historique
+`history/history_during_period` via la connexion HA authentifiée ; aucun appel de service. La liaison climate exige la référence explicite
 `specific_states.regulation_diagnostics` ; les noms d'entités ne constituent pas une preuve.
 Les valeurs non fiables sont masquées dans les champs interprétés ; le JSON brut
 reste destiné à l'inspection technique et ne valide aucune estimation.
+
+Le test navigateur V0.2 est `frontend/tests/visual-browser.html` ; il simule Recorder,
+les états indisponibles et les erreurs d'autorisation. Le runner et la CI vérifient
+les interactions avec Chrome isolé, sans connexion au HA principal.
+
+Les notices des bibliothèques embarquées sont livrées dans
+`custom_components/smartpi_dashboard/frontend/THIRD_PARTY_NOTICES.md`.

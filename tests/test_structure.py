@@ -20,9 +20,16 @@ class IntegrationTests(unittest.TestCase):
         self.assertGreater(file.stat().st_size, 1000)
 
     def test_no_home_assistant_writes(self):
-        sources = "\n".join(p.read_text() for p in (ROOT / "frontend" / "src").glob("*.ts"))
-        for forbidden in ("callService", "callApi", "callWS", "fetch(", "XMLHttpRequest", "WebSocket(", "set_temperature(", "reset_smartpi_learning("):
+        sources = "\n".join(p.read_text() for p in (ROOT / "frontend" / "src").rglob("*.ts"))
+        for forbidden in ("callService", "callApi", "fetch(", "XMLHttpRequest", "WebSocket(", "set_temperature(", "reset_smartpi_learning("):
             self.assertNotIn(forbidden, sources)
+        history = (ROOT / "frontend/src/services/history.ts").read_text()
+        self.assertRegex(history, r"type:\s*[\"']history/history_during_period[\"']")
+        self.assertEqual(sources.count("await hass.callWS<unknown>"), 1)
+        for source in (ROOT / "frontend/src").rglob("*.ts"):
+            if source.name != "history.ts":
+                self.assertNotIn(".callWS(", source.read_text())
+                self.assertNotIn(".callWS<", source.read_text())
         backend = "\n".join(p.read_text() for p in COMPONENT.glob("*.py"))
         for forbidden in ("services.async_call", "states.async_set", "async_update_entry", "async_register_entity_service"):
             self.assertNotIn(forbidden, backend)

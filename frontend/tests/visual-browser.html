@@ -1,0 +1,184 @@
+<!doctype html><meta charset="utf-8" /><meta
+  name="viewport"
+  content="width=device-width,initial-scale=1"
+/><title>SmartPI 0.2 — synthetic validation</title>
+<style>
+  body {
+    margin: 0;
+  }
+  :root {
+    --primary-background-color: #f4f6f8;
+    --primary-text-color: #202c38;
+    --secondary-text-color: #5a6977;
+    --secondary-background-color: #eef2f5;
+    --card-background-color: #fff;
+    --divider-color: #d9e0e6;
+    --primary-color: #247aab;
+    --text-primary-color: white;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --primary-background-color: #111820;
+      --primary-text-color: #e1e8ed;
+      --secondary-text-color: #a9bac7;
+      --secondary-background-color: #1a2630;
+      --card-background-color: #16212a;
+      --divider-color: #354653;
+      --primary-color: #69b4de;
+      --text-primary-color: #111;
+    }
+  }
+</style>
+<script type="module">
+  import "../../custom_components/smartpi_dashboard/frontend/smartpi-dashboard.js";
+  const panel = document.createElement("smartpi-dashboard-panel");
+  document.body.append(panel);
+  const end = Date.now() / 1000;
+  function make(name, mode = "smartpi") {
+    return {
+      entity_id: "sensor." + name,
+      state: mode === "hysteresis" ? "bootstrap_hysteresis" : "stable",
+      last_updated: new Date().toISOString(),
+      attributes: {
+        schema_version: 2,
+        friendly_name: name,
+        live: {
+          control: {
+            mode,
+            phase: mode === "hysteresis" ? "Hysteresis" : "Stable",
+            saturation_state: "NO_SAT",
+            in_deadband: false,
+            in_deadtime_window: false,
+          },
+          temperature: {
+            indoor: 19.2,
+            outdoor: 8,
+            integral_mode: "I:HOLD(deadtime)",
+          },
+          setpoint: { filtered_setpoint: 20 },
+          power: {
+            applied_percent: mode === "hysteresis" ? 100 : 42,
+            limited_percent: 42,
+            command_percent: 43,
+            pi_percent: mode === "hysteresis" ? 0 : 24,
+            ff_percent: mode === "hysteresis" ? 0 : 19,
+            hold_percent: 0,
+          },
+          model: {
+            a: 0.012,
+            b: 0.00042,
+            confidence: "ab_learning",
+            tau_min: 9999,
+            tau_reliable: false,
+            deadtime_heat_s: 900,
+            deadtime_heat_reliable: true,
+          },
+          analysis: {
+            feedforward: {
+              u_ff1: 0.18,
+              u_ff2: -0.04,
+              u_ff_final: 0.14,
+              u_ff3: 0.05,
+              u_ff_effective: 0.19,
+              ff2_freeze_reason: "model_confidence",
+            },
+            twin: {
+              twin_model_reliable: false,
+              twin_T_pred: 120,
+              twin_warming_up: false,
+              twin_T_steady: 123,
+              twin_T_steady_reliable: false,
+            },
+          },
+          feedforward: { ff3_status: "disabled:twin_steady_invalid" },
+          learning: {
+            stage: mode === "hysteresis" ? "bootstrap" : "learning",
+            bootstrap_progress_percent: 60,
+          },
+          calibration: { state: "Idle" },
+        },
+        history: {
+          temperature: { indoor: 19.2 },
+          setpoint: { filtered_setpoint: 20 },
+          power: {
+            applied_percent: 42,
+            command_percent: 43,
+            pi_percent: 24,
+            ff_percent: 19,
+          },
+          model: { a: 0.012, b: 0.00042 },
+        },
+      },
+    };
+  }
+  let writes = 0,
+    reads = 0;
+  const forbid = () => {
+    writes++;
+    throw Error("Forbidden write");
+  };
+  const states = {
+    "sensor.atelier": make("Atelier — façade nord"),
+    "sensor.salon": make("Salon", "hysteresis"),
+  };
+  // Deliberately use valid matching IDs independent of display names.
+  states["sensor.atelier"].entity_id = "sensor.atelier";
+  states["sensor.salon"].entity_id = "sensor.salon";
+  const fixtureRows = Array.from({ length: 5761 }, (_, i) => {
+    const time = end - 48 * 3600 + i * 30;
+    const gap = i > 2100 && i < 2150;
+    return {
+      lu: time,
+      s: gap ? "unavailable" : i < 1800 ? "bootstrap_hysteresis" : "stable",
+      a: gap
+        ? {}
+        : {
+            schema_version: 2,
+            history: {
+              temperature: { indoor: 19 + 0.45 * Math.sin(i / 120) },
+              setpoint: { filtered_setpoint: i < 3000 ? 19 : 20 },
+              power: {
+                applied_percent: i < 1800 ? 100 : 40 + 10 * Math.sin(i / 50),
+                command_percent: 45,
+                pi_percent: 30 + 110 * Math.sin(i / 90),
+                ff_percent: 20,
+              },
+              model: { a: 0.012 + i * 0.0000001, b: 0.0004 + i * 0.000000002 },
+            },
+          },
+    };
+  });
+  window.readMessages = [];
+  const hass = {
+    states,
+    callService: forbid,
+    callApi: forbid,
+    callWS: async (msg) => {
+      if (msg.type !== "history/history_during_period") return forbid();
+      reads++;
+      window.readMessages.push(msg);
+      await new Promise((r) => setTimeout(r, 80));
+      if (window.historyMode === "error") throw Error("unauthorized");
+      return {
+        [msg.entity_ids[0]]:
+          window.historyMode === "empty"
+            ? []
+            : fixtureRows.filter(
+                (s) =>
+                  s.lu >= Date.parse(msg.start_time) / 1000 &&
+                  s.lu <= Date.parse(msg.end_time) / 1000,
+              ),
+      };
+    },
+  };
+  panel.hass = hass;
+  window.fixture = {
+    panel,
+    hass,
+    make,
+    fixtureRows,
+    get counts() {
+      return { writes, reads };
+    },
+  };
+</script>
