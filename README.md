@@ -18,8 +18,8 @@ La consultation Recorder (24–48 h), les graphiques historiques et les comparai
 
 HACS nécessite des dépôts publics ; tant que le dépôt est privé, compiler le frontend puis copier le composant manuellement :
 
-1. Dans \`frontend\`, exécuter \`npm install && npm run build\`.
-2. Copier \`custom_components/smartpi_dashboard/\` (incluant le bundle généré dans \`frontend/\`) vers le dossier \`config/custom_components/smartpi_dashboard/\` de Home Assistant.
+1. Dans `frontend`, exécuter `npm install && npm run build`.
+2. Copier `custom_components/smartpi_dashboard/` (incluant le bundle généré dans `frontend/`) vers le dossier `config/custom_components/smartpi_dashboard/` de Home Assistant.
 3. Redémarrer Home Assistant, puis **Paramètres → Appareils et services → Ajouter une intégration → SmartPI Dashboard**.
 4. Ouvrir **SmartPI Dashboard** dans la barre latérale (administrateurs seulement).
 
@@ -28,13 +28,13 @@ La compilation nécessite Node.js 22+. Rien à installer sur le serveur HA aprè
 
 ## Développement
 
-\`\`\`bash
+```bash
 cd frontend
 npm install
 npm run typecheck
 npm test
 npm run build
-\`\`\`
+```
 
 Sources de référence :
 - https://github.com/KipK/vtherm_smartpi/blob/master/documentation/en/diagnostics.md
@@ -42,3 +42,20 @@ Sources de référence :
 - https://github.com/Liquidmasl/vtherm_dashboard
 - https://developers.home-assistant.io/docs/frontend/custom-ui/
 - https://hacs.dev/docs/publish/start/
+
+## Validation avant installation
+
+Consulter [AUDIT.md](AUDIT.md) pour les résultats, les limites et le protocole de test.
+Les tests structurels se lancent avec `python3 -m unittest discover -s tests -v`.
+Pour inclure les tests de cycle de vie, utiliser un environnement Python 3.14
+isolé avec `homeassistant==2026.11.0` installé (sinon ces trois tests sont ignorés).
+La CI exécute également ce groupe dans un job dédié.
+
+Pour vérifier le rendu sans HA, servir la racine du dépôt avec un serveur HTTP
+local et ouvrir `frontend/tests/browser.html` : uniquement des données synthétiques,
+aucune connexion à Home Assistant. `window.auditResult` donne les contrôles du scénario.
+Le frontend utilise uniquement les instantanés `hass.states` ; aucun appel réseau
+ou service n'est nécessaire. La liaison climate exige la référence explicite
+`specific_states.regulation_diagnostics` ; les noms d'entités ne constituent pas une preuve.
+Les valeurs non fiables sont masquées dans les champs interprétés ; le JSON brut
+reste destiné à l'inspection technique et ne valide aucune estimation.

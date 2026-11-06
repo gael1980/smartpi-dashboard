@@ -21,8 +21,12 @@ class IntegrationTests(unittest.TestCase):
 
     def test_no_home_assistant_writes(self):
         sources = "\n".join(p.read_text() for p in (ROOT / "frontend" / "src").glob("*.ts"))
-        for forbidden in ("callService(", "callApi(", "set_temperature(", "reset_smartpi_learning("):
+        for forbidden in ("callService", "callApi", "callWS", "fetch(", "XMLHttpRequest", "WebSocket(", "set_temperature(", "reset_smartpi_learning("):
             self.assertNotIn(forbidden, sources)
+        backend = "\n".join(p.read_text() for p in COMPONENT.glob("*.py"))
+        for forbidden in ("services.async_call", "states.async_set", "async_update_entry", "async_register_entity_service"):
+            self.assertNotIn(forbidden, backend)
+
 
 
 if __name__ == "__main__":
