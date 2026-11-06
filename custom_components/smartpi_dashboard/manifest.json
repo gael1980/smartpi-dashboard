@@ -1,7 +1,7 @@
 {
   "domain": "smartpi_dashboard",
   "name": "SmartPI Dashboard",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "documentation": "https://github.com/gael1980/smartpi-dashboard",
   "issue_tracker": "https://github.com/gael1980/smartpi-dashboard/issues",
   "codeowners": [

@@ -2,6 +2,10 @@ import {LitElement, html, css, nothing} from "lit";
 import {customElement, property, state} from "lit/decorators.js";
 import {discover, reliableValue, display, at, num, inBootstrap, explanations, type HassLike, type SmartPIDiagnostic} from "./adapter";
 
+import "./components/visual-diagnostics";
+import {SessionHistory} from "./utils/timeseries";
+import type {HistoryConnection} from "./services/history";
+
 type Field = {label: string, path: string, unit?: string, digits?: number, reliable?: string};
 type Section = {title: string, note: string, fields: Field[]};
 
@@ -104,10 +108,16 @@ const sections: Section[] = [
 
 @customElement("smartpi-dashboard-panel")
 export class SmartPIDashboardPanel extends LitElement {
-  @property({attribute:false}) hass?: HassLike;
+  @property({attribute:false}) hass?: HassLike & Partial<HistoryConnection>;
   @property({attribute:false}) panel?: unknown;
   @property({type:Boolean}) narrow = false;
   @state() private selectedId = "";
+
+  private sessionHistory = new SessionHistory();
+  protected willUpdate(changed: Map<string, unknown>) {
+    if(changed.has("hass") && this.hass) this.sessionHistory.collect(discover(this.hass), this.hass.states);
+  }
+  disconnectedCallback(){this.sessionHistory.clear();super.disconnectedCallback();}
 
   private metric(label: string, value: unknown, unit = "", digits = 2) {
     return html`<div class="metric"><span>${label}</span><strong>${display(value,unit,digits)}</strong></div>`;
@@ -153,20 +163,9 @@ export class SmartPIDashboardPanel extends LitElement {
             · B : ${display(at(v,"learning.emea_samples_b"),"",0)} / ${display(at(v,"learning.bootstrap_target_b"),"",0)}</div>
         </div>` : nothing}
       </section>
-      <div class="columns">
-        <section class="surface"><h3>Comprendre la situation</h3>
-          ${notes.length ? html`<ul>${notes.map(s => html`<li>${s}</li>`)}</ul>` :
-            html`<p class="muted">Aucune observation particulière parmi les règles vérifiées. Examiner les diagnostics pour davantage de détails.</p>`}
-          <p class="foot">Interprétations limitées aux états publiés par SmartPI.</p>
-        </section>
-        <section class="surface"><h3>Chaîne de commande</h3>
-          ${this.power("Proportionnelle + intégrale",at(v,"power.pi_percent"),"pi")}
-          ${this.power("Feedforward",at(v,"power.ff_percent"),"ff")}
-          ${this.power("Demandée",at(v,"power.command_percent"),"cmd")}
-          ${this.power("Appliquée",at(v,"power.applied_percent"),"applied")}
-          <p class="foot">Pourcentages de commande du régulateur, et non puissance électrique mesurée.</p>
-        </section>
-      </div>
+      <smartpi-visual-diagnostics .hass=${this.hass} .diagnostic=${d} .session=${this.sessionHistory.get(d.entityId)}></smartpi-visual-diagnostics>
+      <details class="surface technical"><summary>Diagnostics techniques complets</summary>
+      <section><h3>Comprendre la situation</h3><ul>${notes.map(s=>html`<li>${s}</li>`)}</ul></section>
       <div class="subhead"><h2>Diagnostics techniques</h2><span class="muted small">Déplier pour comprendre les détails</span></div>
       <div class="details-list">
         ${sections.map(s=>html`<details class="surface">
@@ -178,9 +177,7 @@ export class SmartPIDashboardPanel extends LitElement {
       <details class="surface raw"><summary>Diagnostic brut JSON <span class="chevron">⌄</span></summary>
         <pre>${JSON.stringify({schema_version:2,state:d.state,live:d.live,history:d.history},null,2)}</pre>
       </details>
-      <section class="surface soon"><h3>Historique Recorder</h3>
-        <p>Le contrat v2 définit 8 séries historiques ; leur disponibilité dans Recorder doit être vérifiée sur chaque installation. Les courbes 24–48 h et les annotations sont prévues après validation de cette première version. Aucune courbe n’est inventée à partir d’un simple instantané.</p>
-      </section>
+      </details>
     `;
   }
 
@@ -189,7 +186,7 @@ export class SmartPIDashboardPanel extends LitElement {
     const selected=list.find(d=>d.entityId===this.selectedId)??list[0];
     return html`<div class="header"><ha-menu-button .hass=${this.hass} .narrow=${this.narrow}></ha-menu-button>
        <div class="head-text"><h1>SmartPI Dashboard</h1><span>Comprendre la régulation thermique</span></div>
-       <span class="tag readonly">Lecture seule</span></div>
+       <span class="tag readonly">Lecture seule · 0.2</span></div>
       <main>
         <div class="flex spread intro"><div><span class="eyebrow">SYNTHÈSE</span><h2>Mes thermostats</h2></div>
           <span class="muted small">${list.length} diagnostic${list.length>1?"s":""} SmartPI v2</span></div>
