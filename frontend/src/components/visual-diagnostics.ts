@@ -72,6 +72,55 @@ export class VisualDiagnostics extends LitElement {
   @state() private loading = false;
   @state() private error = "";
   @state() private preferSession = false;
+  @state() private followNow = true;
+  private filteredCache?: {
+    all: Sample[];
+    start: number;
+    end: number;
+    samples: Sample[];
+    events: ReturnType<typeof observedEvents>;
+  };
+  private get usingRecorder() {
+    return (
+      this.recorderEntity === this.diagnostic?.entityId &&
+      !this.preferSession &&
+      usable(this.recorder)
+    );
+  }
+  protected willUpdate(changed: Map<string, unknown>) {
+    if (
+      this.followNow &&
+      !this.usingRecorder &&
+      (changed.has("session") ||
+        changed.has("preferSession") ||
+        changed.has("recorder"))
+    ) {
+      const latest = this.session.at(-1)?.time;
+      if (latest !== undefined && latest > this.range[1]) {
+        this.end = latest;
+        this.range = [latest - this.hours * 3600, latest];
+      }
+    }
+  }
+  private windowData(all: Sample[]) {
+    if (
+      this.filteredCache?.all === all &&
+      this.filteredCache.start === this.range[0] &&
+      this.filteredCache.end === this.range[1]
+    )
+      return this.filteredCache;
+    return (this.filteredCache = {
+      all,
+      start: this.range[0],
+      end: this.range[1],
+      samples: all.filter(
+        (s) => s.time >= this.range[0] && s.time <= this.range[1],
+      ),
+      events: observedEvents(all).filter(
+        (e) => e.time >= this.range[0] && e.time <= this.range[1],
+      ),
+    });
+  }
   private generation = 0;
   private recorderEntity = "";
   protected updated(changed: Map<string, unknown>) {
@@ -88,6 +137,7 @@ export class VisualDiagnostics extends LitElement {
   }
   disconnectedCallback() {
     ++this.generation;
+    this.filteredCache = undefined;
     this.recorder = [];
     this.session = [];
     this.loading = false;
@@ -98,10 +148,12 @@ export class VisualDiagnostics extends LitElement {
     if (this.hasUpdated) void this.load();
   }
   private reset() {
+    this.followNow = true;
     this.end = Date.now() / 1000;
     this.range = [this.end - this.hours * 3600, this.end];
   }
   private shift(direction: number) {
+    this.followNow = false;
     const width = this.range[1] - this.range[0],
       now = Date.now() / 1000,
       min = this.end - 48 * 3600;
@@ -112,6 +164,7 @@ export class VisualDiagnostics extends LitElement {
     this.range = [end - width, end];
   }
   private zoom(factor: number) {
+    this.followNow = false;
     const [a, b] = this.range,
       width = Math.max(60, Math.min(48 * 3600, (b - a) * factor));
     this.range = [b - width, b];
@@ -156,17 +209,9 @@ export class VisualDiagnostics extends LitElement {
   render() {
     const d = this.diagnostic;
     if (!d) return nothing;
-    const fromRecorder =
-        this.recorderEntity === d.entityId &&
-        !this.preferSession &&
-        usable(this.recorder),
+    const fromRecorder = this.usingRecorder,
       all = fromRecorder ? this.recorder : this.session;
-    const samples = all.filter(
-      (s) => s.time >= this.range[0] && s.time <= this.range[1],
-    );
-    const events = observedEvents(all).filter(
-      (e) => e.time >= this.range[0] && e.time <= this.range[1],
-    );
+    const { samples, events } = this.windowData(all);
     const chart = (heading: string, curves: Curve[], percent = false) =>
       html`<section class="chart">
         <smartpi-time-chart
@@ -177,7 +222,10 @@ export class VisualDiagnostics extends LitElement {
           .percent=${percent}
           .syncKey=${d.entityId}
           @time-range=${(e: CustomEvent<[number, number]>) => {
-            if (e.detail[1] > e.detail[0]) this.range = e.detail;
+            if (e.detail[1] > e.detail[0]) {
+              this.followNow = false;
+              this.range = e.detail;
+            }
           }}
         ></smartpi-time-chart>
       </section>`;
@@ -272,6 +320,19 @@ export class VisualDiagnostics extends LitElement {
           Session uniquement</label
         >
       </div>
+      ${!fromRecorder
+        ? html`<label class="follow"
+            ><input
+              type="checkbox"
+              .checked=${this.followNow}
+              @change=${(e: Event) => {
+                this.followNow = (e.target as HTMLInputElement).checked;
+                if (this.followNow) this.reset();
+              }}
+            />
+            Suivre les nouvelles publications de session</label
+          >`
+        : nothing}
       ${this.loading
         ? html`<p role="status" class="notice">
             Lecture de l’historique… La collecte de session continue.

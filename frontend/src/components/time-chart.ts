@@ -18,6 +18,8 @@ export class TimeChart extends LitElement {
   @property() heading = "";
   @property() syncKey = "smartpi";
   @property({ type: Boolean }) percent = false;
+  private lastSamples?: Sample[];
+  private lastSignature = "";
   private plot?: uPlot;
   private observer?: ResizeObserver;
   private applying = false;
@@ -41,7 +43,26 @@ export class TimeChart extends LitElement {
     this.plot = undefined;
   }
   protected updated() {
+    const signature = JSON.stringify([
+      this.curves,
+      this.heading,
+      this.syncKey,
+      this.percent,
+      this.range,
+    ]);
+    if (this.lastSamples === this.samples && this.lastSignature === signature)
+      return;
+    this.lastSamples = this.samples;
+    this.lastSignature = signature;
     this.draw();
+  }
+  private toggleSeries(index: number) {
+    const label = this.curves[index].label;
+    const show = this.hiddenCurves.has(label);
+    if (this.plot) this.plot.setSeries(index + 1, { show });
+    if (show) this.hiddenCurves.delete(label);
+    else this.hiddenCurves.add(label);
+    this.requestUpdate();
   }
   private draw() {
     if (!this.isConnected) return;
@@ -137,10 +158,25 @@ export class TimeChart extends LitElement {
           })),
         ],
         hooks: {
+          setSeries: [
+            (u) => {
+              if (u.status !== 1 || u !== this.plot) return;
+              u.series.forEach((series, i) => {
+                if (i && typeof series.label === "string") {
+                  if (series.show === false)
+                    this.hiddenCurves.add(series.label);
+                  else this.hiddenCurves.delete(series.label);
+                }
+              });
+              this.requestUpdate();
+            },
+          ],
           setScale: [
             (u, key) => {
               if (
                 key === "x" &&
+                u.status === 1 &&
+                u === this.plot &&
                 !this.applying &&
                 u.scales.x.min != null &&
                 u.scales.x.max != null &&
@@ -179,6 +215,18 @@ export class TimeChart extends LitElement {
       this.curves.some((c) => valueAt(s, c.path) !== null),
     ).length;
     return html`<h3>${this.heading}</h3>
+      <div class="series-controls" role="group" aria-label="Séries affichées">
+        ${this.curves.map(
+          (c, i) =>
+            html`<button
+              aria-pressed=${!this.hiddenCurves.has(c.label)}
+              @click=${() => this.toggleSeries(i)}
+            >
+              <span style=${"background:" + c.color} aria-hidden="true"></span
+              >${c.label}
+            </button>`,
+        )}
+      </div>
       <div class="plot" aria-label=${this.heading}></div>
       ${!count
         ? html`<p>Aucune valeur disponible pour cette fenêtre.</p>`
@@ -228,6 +276,33 @@ export class TimeChart extends LitElement {
       h3 {
         font-size: 15px;
         margin: 0 0 12px;
+      }
+      .series-controls {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-bottom: 10px;
+      }
+      .series-controls button {
+        font: inherit;
+        font-size: 12px;
+        color: inherit;
+        background: transparent;
+        border: 1px solid var(--divider-color);
+        border-radius: 5px;
+        min-height: 32px;
+        padding: 6px 9px;
+        cursor: pointer;
+      }
+      .series-controls button[aria-pressed="false"] {
+        text-decoration: line-through;
+      }
+      .series-controls span {
+        display: inline-block;
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+        margin-right: 6px;
       }
       .plot {
         width: 100%;

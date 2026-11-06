@@ -74,7 +74,10 @@ const checks = {};
 try {
   await mkdir(output, { recursive: true });
   await send("Page.enable");
+  await send("Page.bringToFront");
   await send("Runtime.enable");
+  await send("Emulation.setTimezoneOverride", { timezoneId: "UTC" });
+  await send("Emulation.setLocaleOverride", { locale: "en-US" });
   await send("Emulation.setDeviceMetricsOverride", {
     width: 1440,
     height: 1000,
@@ -102,6 +105,36 @@ try {
     `return [...root.querySelectorAll('smartpi-time-chart')].every(c=>Math.abs(c.plot.scales.x.min-v.range[0])<.1&&Math.abs(c.plot.scales.x.max-v.range[1])<.1)&&Math.abs(v.range[1]-v.range[0]-12*3600)<.1;`,
   );
   assert.ok(checks.zoom);
+  await run(
+    `root.querySelector('smartpi-time-chart').shadowRoot.querySelector('.series-controls button').focus();`,
+  );
+  await send("Input.dispatchKeyEvent", {
+    type: "keyDown",
+    key: "Enter",
+    code: "Enter",
+    windowsVirtualKeyCode: 13,
+    text: "\r",
+    unmodifiedText: "\r",
+  });
+  await send("Input.dispatchKeyEvent", {
+    type: "keyUp",
+    key: "Enter",
+    code: "Enter",
+    windowsVirtualKeyCode: 13,
+  });
+  await settle();
+  checks.keyboardLegend = await run(
+    `return root.querySelector('smartpi-time-chart').plot.series[1].show===false && root.querySelector('smartpi-time-chart').shadowRoot.querySelector('.series-controls button').getAttribute('aria-pressed')==='false';`,
+  );
+  if (!checks.keyboardLegend)
+    checks.legendDetails = await run(
+      `const c=root.querySelector('smartpi-time-chart');return {button:c.shadowRoot.querySelector('.series-controls button').outerHTML,show:c.plot.series[1].show,hidden:[...c.hiddenCurves],focus:c.shadowRoot.activeElement?.outerHTML};`,
+    );
+  assert.ok(checks.keyboardLegend);
+  checks.unrelatedUpdate = await run(
+    `const charts=[...root.querySelectorAll('smartpi-time-chart')],plots=charts.map(c=>c.plot);p.hass={...fixture.hass,states:{...fixture.hass.states,'sensor.unrelated':{entity_id:'sensor.unrelated',state:'1',attributes:{}}}};await p.updateComplete;await v.updateComplete;await Promise.all(charts.map(c=>c.updateComplete));return charts.every((c,i)=>c.plot===plots[i]);`,
+  );
+  assert.ok(checks.unrelatedUpdate);
   await run(
     `const c=root.querySelector('smartpi-time-chart');c.plot.setSeries(1,{show:false});root.querySelector('[aria-label="Période précédente"]').click();`,
   );
@@ -218,11 +251,27 @@ try {
   );
   assert.ok(checks.empty);
   await run(
+    `const id='sensor.salon';fixture.hass.states[id]={...fixture.hass.states[id],last_updated:new Date(Date.now()+500).toISOString()};p.hass={...fixture.hass,states:{...fixture.hass.states}};`,
+  );
+  await settle();
+  checks.sessionVisible = await run(
+    `const last=v.session.at(-1);return [...root.querySelectorAll('smartpi-time-chart')].every(c=>c.samples.includes(last));`,
+  );
+  assert.ok(checks.sessionVisible);
+  await run(`root.querySelector('[aria-label="Zoom avant"]').click();`);
+  await settle();
+  checks.sessionPaused = await run(
+    `const before=[...v.range],id='sensor.salon';fixture.hass.states[id]={...fixture.hass.states[id],last_updated:new Date(Date.now()+800).toISOString()};p.hass={...fixture.hass,states:{...fixture.hass.states}};await p.updateComplete;await v.updateComplete;return v.range[0]===before[0]&&v.range[1]===before[1]&&!v.followNow;`,
+  );
+  assert.ok(checks.sessionPaused);
+  await run(`v.reset();`);
+  await settle();
+  await run(
     `const id='sensor.salon';fixture.hass.states[id]={...fixture.hass.states[id],state:'unavailable',last_updated:new Date(Date.now()+1000).toISOString()};p.hass={...fixture.hass,states:{...fixture.hass.states}};`,
   );
   await settle();
   checks.reactivity = await run(
-    `return v.session.some(s=>s.state==='unavailable'&&Object.keys(s.history).length===0);`,
+    `const charts=[...root.querySelectorAll('smartpi-time-chart')];return v.session.some(s=>s.state==='unavailable'&&Object.keys(s.history).length===0)&&charts.every(c=>c.samples.some(s=>s.state==='unavailable'));`,
   );
   assert.ok(checks.reactivity);
   checks.cleanup = await run(

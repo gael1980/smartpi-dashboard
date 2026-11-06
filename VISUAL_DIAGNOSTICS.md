@@ -185,7 +185,7 @@ n'est modifié. Aucun déploiement ni redémarrage autorisé par cette livraison
 
 ### Résultats locaux avant publication
 
-- TypeScript et build : réussis ; bundle autonome d'environ 128 Kio.
+- TypeScript et build : réussis ; bundle autonome d'environ 131 Kio.
 - Tests Node : **20 réussites, zéro échec/skip**.
 - Tests unittest avec HA 2026.11.0/Python 3.14.10 : **6 réussites, zéro échec/skip**.
 - Runner Chrome isolé : 5 760 publications synthétiques, 3 courbes initiales,
@@ -201,3 +201,26 @@ n'est modifié. Aucun déploiement ni redémarrage autorisé par cette livraison
 
 Les résultats des GitHub Actions après publication seront reportés dans la PR ;
 ces résultats locaux ne sont pas présentés comme une CI déjà exécutée.
+
+### Revue ECC complémentaire
+
+Les perspectives code/erreurs, tests/simplification et contrats/types/accessibilité
+ont été relues avec les skills ECC disponibles. Trois constats confirmés ont été
+corrigés :
+
+1. La session suit maintenant les nouvelles publications dans la fenêtre visible.
+   Un zoom/déplacement suspend ce suivi ; la réinitialisation ou la case de suivi
+   permet de revenir au présent. Le test vérifie les points réellement affichés.
+2. Le filtrage est mémorisé et uPlot n'est plus recréé sur une mise à jour HA sans
+   impact sur les séries. Le test vérifie l'identité des instances après la
+   modification d'une entité étrangère.
+3. Des boutons natifs exposent les séries avec `aria-pressed`, en complément de la
+   légende uPlot. Activation par Entrée et persistance sont testées dans Chrome.
+
+Les callbacks de zoom ne publient pas de changement de fenêtre pendant
+l'initialisation ni depuis une instance obsolète. Le premier run Linux de la PR
+avait bloqué lors de l'initialisation navigateur ; la correction garde le test
+actif. Les tests déterministes utilisent UTC/en-US dans leur navigateur isolé.
+Les résultats de la nouvelle CI sont suivis dans la PR, sans effacer ce premier échec.
+Les skills utiles sont déjà installées dans l'environnement Codex/ECC et sont
+référencées dans AGENTS.md ; aucune copie externe supplémentaire n'est ajoutée.

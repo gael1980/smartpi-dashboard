@@ -25,3 +25,28 @@ Source du schéma : https://github.com/KipK/vtherm_smartpi/blob/master/custom_co
   la borne de mémoire de session. Exécuter les tests navigateur sur fixtures
   synthétiques uniquement ; jamais injecter le bundle dans le HA principal pour
   contourner l'absence d'autorisation de déploiement.
+
+
+## Skills Codex utiles au projet
+
+Ces skills sont déjà disponibles via l'environnement Codex / le plugin ECC ;
+ne pas en installer des copies en double dans le dépôt.
+
+- `ecc:frontend-design-direction` : hiérarchie de supervision et vérification des
+  états visuels sur desktop/mobile, avec preuves de rendu.
+- `ecc:accessibility` : contrôles sémantiques, clavier, focus, contraste, tables
+  alternatives aux Canvas. Préférable ici à la skill React `frontend-a11y`.
+- `ecc:e2e-testing` : scénarios stables, attente d'états explicites, fixtures et
+  artefacts CI ; ses exemples Playwright sont des principes, pas une obligation
+  de changer le runner du projet.
+- `ecc:verification-loop` : typage, build, tests, sécurité et revue du diff ;
+  distinguer validations locales, CI et acceptation sur une installation HA.
+- `context7-mcp` : documentation actuelle HA, Lit et bibliothèque de graphiques.
+- `ecc:skill-scout` : recherche de skills pertinentes avant ajout ; sources locales
+  en premier, aucune installation externe automatique.
+- `ecc:source-command-review-pr` : revue à plusieurs perspectives pour une PR
+  substantielle ; consolider les constats et ne rapporter que les défauts étayés.
+
+Choisir selon la tâche, lire les instructions avant application, conserver les
+contraintes de lecture seule et ne pas prétendre à une certification scientifique
+ou d'accessibilité à partir de la seule utilisation d'une skill.
