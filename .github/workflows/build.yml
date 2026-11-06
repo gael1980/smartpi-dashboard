@@ -1,0 +1,46 @@
+name: Validate and build SmartPI Dashboard
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install frontend dependencies
+        run: cd frontend && npm install --no-audit --no-fund
+      - name: TypeScript verification
+        run: cd frontend && npm run typecheck
+      - name: Adapter tests
+        run: cd frontend && npm test
+      - name: Build integration bundle
+        run: cd frontend && npm run build
+      - name: Structural and read-only tests
+        run: python3 -m unittest discover -s tests -v
+      - name: Publish compiled frontend to this private repository
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add frontend/package-lock.json custom_components/smartpi_dashboard/frontend/smartpi-dashboard.js
+          if ! git diff --cached --quiet; then
+            git commit -m "build: package frontend for manual Home Assistant installation"
+            git push
+          fi
+      - name: Upload installable integration
+        uses: actions/upload-artifact@v4
+        with:
+          name: smartpi-dashboard-homeassistant
+          path: custom_components/smartpi_dashboard/
+          if-no-files-found: error

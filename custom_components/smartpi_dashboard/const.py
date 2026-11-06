@@ -1,0 +1,5 @@
+DOMAIN = "smartpi_dashboard"
+PANEL_URL_PATH = "smartpi-dashboard"
+PANEL_ELEMENT = "smartpi-dashboard-panel"
+PANEL_JS = "smartpi-dashboard.js"
+STATIC_URL = "/smartpi_dashboard_static"
