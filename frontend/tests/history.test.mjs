@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   decodeRows,
   observedEvents,
+  observedTracking,
   valueAt,
   SessionHistory,
   normalize,
@@ -20,6 +21,27 @@ const row = (
     model: { a: 0.01, b: 0.001 },
   },
 ) => ({ lu, s, a: { schema_version: 2, history } });
+
+test("tracking describes complete publications without weighting them by time", () => {
+  const point = (time, indoor, target = 20) => row(time, "stable", {
+    temperature: { indoor },
+    setpoint: { filtered_setpoint: target },
+  });
+  const burst = decodeRows([
+    point(1, 20), point(2, 20), point(3, 20), point(4, 18),
+    row(8, "unavailable"), point(100, null), point(3604, 18),
+  ]);
+  assert.deepEqual(observedTracking(burst), {
+    pairs: 5, signedMedian: 0, absoluteMedian: 0, largestInterval: 3600,
+  });
+  const opposite = decodeRows([point(1, 22), point(2, 18)]);
+  assert.deepEqual(observedTracking(opposite), {
+    pairs: 2, signedMedian: 0, absoluteMedian: 2, largestInterval: 1,
+  });
+  assert.deepEqual(observedTracking(decodeRows([point(1, 20), point(2, 20, null)])), {
+    pairs: 1, signedMedian: null, absoluteMedian: null, largestInterval: null,
+  });
+});
 test("compressed Recorder shape, sorting, duplicates, zeros, missing values and explicit gaps", () => {
   const samples = decodeRows([
     row(120),

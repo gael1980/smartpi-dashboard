@@ -105,6 +105,10 @@ try {
     `return [...root.querySelectorAll('smartpi-time-chart')].every(c=>Math.abs(c.plot.scales.x.min-v.range[0])<.1&&Math.abs(c.plot.scales.x.max-v.range[1])<.1)&&Math.abs(v.range[1]-v.range[0]-12*3600)<.1;`,
   );
   assert.ok(checks.zoom);
+  checks.trackingWindow = await run(
+    `const summary=root.querySelector('.tracking');const chart=root.querySelector('smartpi-time-chart');const pairs=chart.samples.filter(s=>Number.isFinite(s.history.temperature?.indoor)&&Number.isFinite(s.history.setpoint?.filtered_setpoint)).length;return chart.samples.length>0&&summary.querySelector('dd').textContent===pairs+' / '+chart.samples.length&&summary.textContent.includes('Médiane absolue');`,
+  );
+  assert.ok(checks.trackingWindow);
   await run(
     `root.querySelector('smartpi-time-chart').shadowRoot.querySelector('.series-controls button').focus();`,
   );
@@ -175,6 +179,11 @@ try {
   }).then((r) =>
     writeFile(output + "/desktop.png", Buffer.from(r.data, "base64")),
   );
+  await run(`window.scrollTo(0,0);`);
+  await settle();
+  await send("Page.captureScreenshot", { format: "png", captureBeyondViewport: false }).then((r) =>
+    writeFile(output + "/overview.png", Buffer.from(r.data, "base64")),
+  );
   await run(`v.tab='regulation';v.expert=true;`);
   await settle();
   checks.diagram = await run(
@@ -187,6 +196,8 @@ try {
     `const d=root.querySelector('smartpi-control-diagram'),b=d.shadowRoot.querySelectorAll('g[role="button"]')[2];b.focus();b.dispatchEvent(new KeyboardEvent('keydown',{key:' ',bubbles:true}));await d.updateComplete;const detail=d.shadowRoot.querySelector('aside').textContent;return b.getAttribute('aria-pressed')==='true'&&d.shadowRoot.activeElement===b&&detail.includes('0,5 °C')&&detail.includes('0,8 °C')&&detail.includes('attributes.live.analysis.control.error_p')&&!!d.shadowRoot.querySelector('time[datetime]');`,
   );
   assert.ok(checks.piDetail);
+  checks.liveSeparation = await run(`return !root.querySelector('.toolbar, .tracking, .timeline')&&!!root.querySelector('smartpi-control-diagram');`);
+  assert.ok(checks.liveSeparation);
   await run(`root.querySelector('smartpi-control-diagram').scrollIntoView();`);
   await settle();
   await send("Page.captureScreenshot", {
@@ -242,6 +253,11 @@ try {
     );
     assert.equal(checks.mobileViews[tab], 390);
   }
+  await run(`v.tab='evolution';await v.updateComplete;root.querySelector('.tracking').scrollIntoView({block:'center'});`);
+  await settle();
+  await send("Page.captureScreenshot", { format: "png", captureBeyondViewport: false }).then((r) =>
+    writeFile(output + "/tracking-mobile.png", Buffer.from(r.data, "base64")),
+  );
   await run(`v.tab='regulation';await v.updateComplete;const d=root.querySelector('smartpi-control-diagram');await d.updateComplete;d.shadowRoot.querySelectorAll('.mobile button')[4].click();await d.updateComplete;d.shadowRoot.querySelector('aside').scrollIntoView({block:'center'});`);
   await settle();
   checks.mobileDirectDetail = await run(`const d=root.querySelector('smartpi-control-diagram'),detail=d.shadowRoot.querySelector('aside').textContent;return detail.includes('État de l’hystérésis')&&!detail.includes('Sortie PI publiée')&&d.shadowRoot.querySelectorAll('.block.inactive').length===3&&document.documentElement.scrollWidth===390;`);
@@ -249,7 +265,7 @@ try {
   await send("Page.captureScreenshot", { format: "png", captureBeyondViewport: false }).then((r) =>
     writeFile(output + "/diagram-mobile.png", Buffer.from(r.data, "base64")),
   );
-  await run(`window.historyMode='error';await v.load();`);
+  await run(`v.tab='evolution';window.historyMode='error';await v.load();`);
   await settle();
   checks.permission = await run(
     `return root.textContent.includes('refusée ou impossible')&&root.textContent.includes('Historique de session');`,

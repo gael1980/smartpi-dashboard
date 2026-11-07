@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.2 — 2026-11-07
+
+- Sélection de thermostat plus compacte et horodatage local de la publication.
+- La vue Régulation en direct donne la priorité au schéma et à la chaîne de commande.
+- La vue Évolution ajoute le nombre de couples valides, les médianes signée et
+  absolue de l’écart observé, et l’intervalle maximal entre couples.
+
 ## 0.2.1 — 2026-11-07
 
 - Fiches dans « Le régulateur, en direct » : erreurs P/I, état intégral, gains,

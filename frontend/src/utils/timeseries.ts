@@ -78,11 +78,42 @@ export function valueAt(s: Sample, path: string): number | null {
   if (path === "error") {
     const temp = num(at(s.history, "temperature.indoor")),
       target = num(at(s.history, "setpoint.filtered_setpoint"));
-    return temp === null || target === null ? null : target - temp;
+    return temp === null || target === null ? null : num(target - temp);
   }
   if (path.startsWith("live."))
     return num(reliableValue(s.live, path.slice(5)));
   return num(at(s.history, path));
+}
+function median(values: number[]): number | null {
+  if (values.length < 2) return null;
+  values.sort((a, b) => a - b);
+  const middle = Math.floor(values.length / 2);
+  return values.length % 2
+    ? values[middle]
+    : values[middle - 1] / 2 + values[middle] / 2;
+}
+
+/** Describes complete publications in chronological order, with equal point weights. */
+export function observedTracking(samples: readonly Sample[]) {
+  const errors: number[] = [];
+  let previous: number | null = null;
+  let largestInterval: number | null = null;
+  for (const sample of samples) {
+    const error = valueAt(sample, "error");
+    if (error === null) continue;
+    errors.push(error);
+    if (previous !== null) {
+      largestInterval = Math.max(largestInterval ?? 0, sample.time - previous);
+    }
+    previous = sample.time;
+  }
+  const absolute = errors.map(Math.abs);
+  return {
+    pairs: errors.length,
+    signedMedian: median(errors),
+    absoluteMedian: median(absolute),
+    largestInterval,
+  };
 }
 export function usable(samples: Sample[]): boolean {
   return samples.some((s) => HISTORY_PATHS.some((p) => valueAt(s, p) !== null));

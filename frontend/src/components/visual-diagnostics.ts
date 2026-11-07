@@ -8,7 +8,7 @@ import {
   type SmartPIDiagnostic,
 } from "../adapter";
 import { readHistory, type HistoryConnection } from "../services/history";
-import { usable, observedEvents, type Sample } from "../utils/timeseries";
+import { usable, observedEvents, observedTracking, type Sample } from "../utils/timeseries";
 import "./time-chart";
 import "./control-diagram";
 import "./command-chain";
@@ -58,6 +58,12 @@ const power: Curve[] = [
     step: true,
   },
 ];
+
+const signedDegrees = new Intl.NumberFormat("fr-FR", {
+  maximumFractionDigits: 2,
+  signDisplay: "exceptZero",
+});
+
 @customElement("smartpi-visual-diagnostics")
 export class VisualDiagnostics extends LitElement {
   @property({ attribute: false }) hass?: HassLike & Partial<HistoryConnection>;
@@ -79,6 +85,7 @@ export class VisualDiagnostics extends LitElement {
     end: number;
     samples: Sample[];
     events: ReturnType<typeof observedEvents>;
+    tracking: ReturnType<typeof observedTracking>;
   };
   private get usingRecorder() {
     return (
@@ -109,13 +116,15 @@ export class VisualDiagnostics extends LitElement {
       this.filteredCache.end === this.range[1]
     )
       return this.filteredCache;
+    const samples = all.filter(
+      (s) => s.time >= this.range[0] && s.time <= this.range[1],
+    );
     return (this.filteredCache = {
       all,
       start: this.range[0],
       end: this.range[1],
-      samples: all.filter(
-        (s) => s.time >= this.range[0] && s.time <= this.range[1],
-      ),
+      samples,
+      tracking: observedTracking(samples),
       events: observedEvents(all).filter(
         (e) => e.time >= this.range[0] && e.time <= this.range[1],
       ),
@@ -206,12 +215,36 @@ export class VisualDiagnostics extends LitElement {
       if (generation === this.generation) this.loading = false;
     }
   }
+  private trackingPanel(tracking: ReturnType<typeof observedTracking>, total: number) {
+    const { pairs, signedMedian, absoluteMedian, largestInterval } = tracking;
+    return html`<section class="pane tracking" aria-labelledby="tracking-heading">
+      <div class="tracking-title">
+        <h3 id="tracking-heading">Écart à la consigne filtrée</h3>
+        <span>Consigne filtrée − température intérieure</span>
+      </div>
+      <dl class="metrics">
+        <div><dt>Couples valides</dt><dd>${pairs} / ${total}</dd></div>
+        <div><dt>Médiane signée</dt><dd>${signedMedian === null ? "Indisponible" : `${signedDegrees.format(signedMedian)} °C`}</dd></div>
+        <div><dt>Médiane absolue</dt><dd>${display(absoluteMedian, " °C")}</dd></div>
+        <div><dt>Plus long intervalle entre couples</dt><dd>${display(largestInterval === null ? null : largestInterval / 60, " min", 1)}</dd></div>
+      </dl>
+      <p>${pairs < 2
+        ? "Deux couples valides dans la fenêtre sont nécessaires pour résumer l’écart."
+        : "Un écart positif indique une température sous la consigne filtrée. La médiane absolue indique la taille typique de l’écart observé."}</p>
+      <details>
+        <summary>Méthode et limites</summary>
+        <p>Chaque couple provient d’une même publication et compte une fois, indépendamment de l’intervalle entre les points. Les publications incomplètes sont exclues des médianes. Le plus long intervalle décrit l’espacement des couples valides.</p>
+        <p>Ces valeurs décrivent les publications de la source et de la fenêtre affichées. L’évaluation d’une durée de confort ou d’une réponse à un changement de consigne demande des données et un protocole adaptés.</p>
+      </details>
+    </section>`;
+  }
   render() {
     const d = this.diagnostic;
     if (!d) return nothing;
     const fromRecorder = this.usingRecorder,
       all = fromRecorder ? this.recorder : this.session;
-    const { samples, events } = this.windowData(all);
+    const { samples, events, tracking } = this.windowData(all);
+    const liveView = this.tab === "regulation";
     const chart = (heading: string, curves: Curve[], percent = false) =>
       html`<section class="chart">
         <smartpi-time-chart
@@ -232,8 +265,8 @@ export class VisualDiagnostics extends LitElement {
     return html`<div class="workspace">
       <div class="top">
         <div>
-          <span class="eyebrow">OBSERVATOIRE SMARTPI</span>
-          <h2>Une commande, une réponse thermique</h2>
+          <h2>Observatoire de la régulation</h2>
+          <span class="subtitle">${d.name}</span>
         </div>
         <label class="expert"
           ><input
@@ -248,7 +281,7 @@ export class VisualDiagnostics extends LitElement {
       <nav aria-label="Vues de diagnostic">
         ${[
           ["evolution", "Évolution"],
-          ["regulation", "Régulation"],
+          ["regulation", "Régulation en direct"],
           ["model", "Santé du modèle"],
         ].map(
           ([id, label]) =>
@@ -261,7 +294,7 @@ export class VisualDiagnostics extends LitElement {
             </button>`,
         )}
       </nav>
-      <div class="toolbar">
+      ${liveView ? nothing : html`<div class="toolbar">
         <div class="periods" role="group" aria-label="Plage temporelle">
           ${[1, 3, 6, 12, 24, 48].map(
             (h) =>
@@ -346,10 +379,11 @@ export class VisualDiagnostics extends LitElement {
             Aucune publication dans cette fenêtre. Sélectionner une plage plus
             large ou attendre une mise à jour normale de Home Assistant.
           </p>`
-        : nothing}
+        : nothing}`}
       ${this.tab === "evolution"
         ? html`
             ${chart("Température et consigne filtrée", temp)}
+            ${this.trackingPanel(tracking, samples.length)}
             ${chart("Commande du régulateur · pas des watts", power, true)}
             ${chart("Écart consigne filtrée − température intérieure", [
               {
@@ -501,7 +535,7 @@ export class VisualDiagnostics extends LitElement {
                 </p>
               </section>
             `}
-      <section class="timeline">
+      ${liveView ? nothing : html`<section class="timeline">
         <h3>
           Journal des publications
           <span>${events.length} variations observées</span>
@@ -532,7 +566,7 @@ export class VisualDiagnostics extends LitElement {
           : html`<p class="foot">
               60 dernières variations affichées au maximum.
             </p>`}
-      </section>
+      </section>`}
       ${this.expert
         ? html`<details class="provenance">
             <summary>Provenance et interactions</summary>
@@ -571,9 +605,8 @@ export class VisualDiagnostics extends LitElement {
       justify-content: space-between;
       gap: 16px;
     }
-    .eyebrow {
-      font-size: 10px;
-      letter-spacing: 0.16em;
+    .subtitle {
+      font-size: 13px;
       color: var(--secondary-text-color);
     }
     h2 {
@@ -611,7 +644,7 @@ export class VisualDiagnostics extends LitElement {
     }
     nav button.active {
       border-bottom-color: var(--primary-color);
-      color: var(--primary-color);
+      font-weight: 650;
     }
     button.chosen {
       background: var(--primary-color);
@@ -699,6 +732,24 @@ export class VisualDiagnostics extends LitElement {
       font-size: 20px;
       font-variant-numeric: tabular-nums;
     }
+    .tracking {
+      background: var(--secondary-background-color, var(--card-background-color));
+      border-inline-start: 3px solid var(--primary-color);
+    }
+    .tracking-title h3 { margin: 0 0 5px; }
+    .tracking-title span, .tracking dt {
+      color: var(--secondary-text-color);
+      font-size: 12px;
+    }
+    .tracking dl { margin: 16px 0 12px; }
+    .tracking dd {
+      margin: 4px 0 0;
+      font-size: 19px;
+      font-weight: 650;
+      font-variant-numeric: tabular-nums;
+    }
+    .tracking p { margin: 10px 0; }
+    .tracking summary { font-size: 13px; font-weight: 600; cursor: pointer; }
     .pane p {
       font-size: 13px;
       line-height: 1.6;
@@ -764,6 +815,7 @@ export class VisualDiagnostics extends LitElement {
         gap: 14px;
         font-size: 13px;
       }
+      nav button { min-height: 44px; text-align: start; }
       .chart,
       .pane {
         padding: 18px 10px;

@@ -11,10 +11,12 @@ Panneau scientifique **en lecture seule** pour comprendre SmartPI dans Home Assi
 
 ## État du développement
 
-**Version 0.2.1** : panneau natif avec graphiques température/consigne, commandes,
+**Version 0.2.2** : panneau natif avec graphiques température/consigne, commandes,
 écart filtré et modèle A/B sur 1–48 h. Zoom, déplacement, curseurs synchronisés,
 légende interactive, tables accessibles, schéma logique cliquable et chaîne U.
-Les vues Évolution, Régulation et Santé du modèle proposent un mode expert.
+Les vues Évolution, Régulation en direct et Santé du modèle proposent un mode expert.
+La vue Évolution indique le nombre de couples valides et décrit l’écart à la
+consigne filtrée sur les publications de la fenêtre sélectionnée.
 Le schéma relie chaque bloc aux signaux et motifs publiés, dont les erreurs P et I,
 les gains, l’anti-windup et les contraintes de cycle.
 
@@ -34,7 +36,7 @@ HACS nécessite des dépôts publics ; tant que le dépôt est privé, compiler 
 4. Ouvrir **SmartPI Dashboard** dans la barre latérale (administrateurs seulement).
 
 La compilation nécessite Node.js 22+. Rien à installer sur le serveur HA après compilation.
-**Recorder a été vérifié en lecture seule sur HA 2026.11.0 ; le nouveau panneau n'a pas été installé sur le HA principal.**
+Le transport Recorder a été vérifié en lecture seule sur HA 2026.11.0.
 
 ## Développement
 

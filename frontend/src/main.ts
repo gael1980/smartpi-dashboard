@@ -3,11 +3,16 @@ import {customElement, property, state} from "lit/decorators.js";
 import {discover, reliableValue, display, at, num, inBootstrap, explanations, type HassLike, type SmartPIDiagnostic} from "./adapter";
 
 import "./components/visual-diagnostics";
-import {SessionHistory} from "./utils/timeseries";
+import {SessionHistory, timestamp} from "./utils/timeseries";
 import type {HistoryConnection} from "./services/history";
 
 type Field = {label: string, path: string, unit?: string, digits?: number, reliable?: string};
 type Section = {title: string, note: string, fields: Field[]};
+
+const publicationFormat = new Intl.DateTimeFormat("fr-FR", {
+  dateStyle: "medium",
+  timeStyle: "short",
+});
 
 const sections: Section[] = [
   {title: "Régulation PI et chaîne U", note: "Séparer commande calculée, limitation et commande appliquée.", fields: [
@@ -142,6 +147,7 @@ export class SmartPIDashboardPanel extends LitElement {
     const notes = explanations(d);
     const bootstrap = inBootstrap(d);
     const percent = num(at(v,"learning.bootstrap_progress_percent"));
+    const publication = timestamp(d.lastUpdated);
     return html`
       <section class="hero">
         <div class="flex spread">
@@ -149,7 +155,7 @@ export class SmartPIDashboardPanel extends LitElement {
             <div class="muted small">${d.climateId ?? d.entityId}</div></div>
           <span class="tag">${bootstrap?"Apprentissage / hystérésis":display(at(v,"control.phase"))}</span>
         </div>
-        <p class="muted small">État : ${d.state} · Dernière publication : ${d.lastUpdated ?? "Indisponible"}. Une publication ancienne ne prouve pas une panne.</p>
+        <p class="muted small">Dernière publication ${publication === null ? "indisponible" : html`<time datetime=${d.lastUpdated ?? ""}>${publicationFormat.format(publication * 1000)}</time>`}</p>
         <div class="metrics">
           ${this.metric("Température intérieure",at(v,"temperature.indoor")," °C")}
           ${this.metric("Consigne filtrée",at(v,"setpoint.filtered_setpoint")," °C")}
@@ -186,18 +192,17 @@ export class SmartPIDashboardPanel extends LitElement {
     const selected=list.find(d=>d.entityId===this.selectedId)??list[0];
     return html`<div class="header"><ha-menu-button .hass=${this.hass} .narrow=${this.narrow}></ha-menu-button>
        <div class="head-text"><h1>SmartPI Dashboard</h1><span>Comprendre la régulation thermique</span></div>
-       <span class="tag readonly">Lecture seule · 0.2</span></div>
+       <span class="tag readonly">Lecture seule</span></div>
       <main>
-        <div class="flex spread intro"><div><span class="eyebrow">SYNTHÈSE</span><h2>Mes thermostats</h2></div>
+        <div class="flex spread intro"><h2>Mes thermostats</h2>
           <span class="muted small">${list.length} diagnostic${list.length>1?"s":""} SmartPI v2</span></div>
         ${list.length===0 ? html`<section class="surface empty"><h3>Aucun diagnostic SmartPI v2 détecté</h3>
           <p>Rechercher les capteurs sensor.* dotés de schema_version=2 et des objets live/history dans les outils de développement de Home Assistant.</p></section>`:
           html`<div class="tiles">${list.map(d=>html`<button type="button" class=${"tile "+(selected?.entityId===d.entityId?"selected":"")}
            @click=${()=>{this.selectedId=d.entityId;}} aria-pressed=${selected?.entityId===d.entityId}>
-            <strong>${d.name}</strong><span class="muted small">${inBootstrap(d)?"Bootstrap":display(at(d.live,"control.phase"))}</span>
+            <strong>${d.name}</strong>
             <span class="big">${display(at(d.live,"temperature.indoor")," °C")}</span>
-            <span class="tile-bottom"><span>Cible ${display(at(d.live,"setpoint.filtered_setpoint")," °C")}</span>
-              <span>${display(at(d.live,"power.applied_percent")," %",1)}</span></span>
+            <span class="tile-bottom">Consigne filtrée ${display(at(d.live,"setpoint.filtered_setpoint")," °C")}</span>
           </button>`)}</div>
           ${selected?this.showDiagnostic(selected):nothing}`}
         <footer>Source : capteurs SmartPI Diagnostics v2 · Lecture seule · Aucune commande Home Assistant</footer>
@@ -216,16 +221,16 @@ export class SmartPIDashboardPanel extends LitElement {
     main{max-width:1260px;margin:auto;padding:23px 18px}
     .flex{display:flex;gap:10px;align-items:center}.spread{justify-content:space-between}.intro{margin-bottom:14px}
     .intro h2,.subhead h2{font-size:22px;margin:5px 0}.small{font-size:12px}.muted{color:var(--secondary-text-color)}
-    .tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px;margin-bottom:20px}
+    .tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(175px,1fr));gap:10px;margin-bottom:15px}
     .tile{background:var(--card-background-color);color:inherit;border:1px solid var(--divider-color);border-radius:14px;
-      min-height:150px;padding:16px;text-align:left;cursor:pointer;display:flex;flex-direction:column;gap:8px}
+      min-height:105px;padding:12px 14px;text-align:left;cursor:pointer;display:flex;flex-direction:column;gap:5px}
     button:focus-visible,summary:focus-visible{outline:3px solid var(--primary-color);outline-offset:3px}
     .tile{overflow-wrap:anywhere;min-width:0}
-    .tile:hover{border-color:var(--primary-color)}.tile.selected{outline:2px solid var(--primary-color);outline-offset:-2px}
-    .big{font-size:27px;font-weight:700}.tile-bottom{display:flex;justify-content:space-between;gap:7px;font-size:12px;margin-top:auto}
+    .tile:hover{border-color:var(--primary-color)}.tile.selected{box-shadow:inset 0 -3px var(--primary-color);border-color:var(--primary-color)}
+    .big{font-size:24px;font-weight:700;font-variant-numeric:tabular-nums}.tile-bottom{font-size:12px;margin-top:auto;color:var(--secondary-text-color)}
     .hero,.surface{background:var(--card-background-color);border:1px solid var(--divider-color);border-radius:14px}
-    .hero{padding:23px}.hero h2{margin:5px 0;font-size:27px}
-    .metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:11px;margin-top:20px}
+    .hero{padding:20px;border-inline-start:3px solid var(--primary-color)}.hero h2{margin:4px 0;font-size:25px;overflow-wrap:anywhere}
+    .metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:11px;margin-top:14px}
     .metric{background:var(--secondary-background-color,var(--primary-background-color));border-radius:10px;
       padding:14px;display:flex;flex-direction:column;gap:8px;min-width:0}
     .metric span{font-size:12px;color:var(--secondary-text-color)}.metric strong{font-size:21px;overflow-wrap:anywhere}
@@ -247,7 +252,7 @@ export class SmartPIDashboardPanel extends LitElement {
     .soon{margin-top:10px}.empty{margin-bottom:18px}footer{padding:21px 0;color:var(--secondary-text-color);font-size:12px}
     @media(max-width:850px){.metrics{grid-template-columns:repeat(2,1fr)}.columns,.detail-grid{grid-template-columns:1fr}}
     @media(max-width:520px){main{padding:14px 11px}.hero,.surface{padding:15px}.tiles{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
-      .tile{padding:11px;min-height:134px}.tile-bottom{flex-direction:column}.big{font-size:23px}
+      .tile{padding:10px;min-height:93px}.big{font-size:21px}
       .metric strong{font-size:18px}.hero h2{font-size:23px}.hero .spread{align-items:flex-start;flex-direction:column}
       .subhead{display:block}.readonly{font-size:10px}.head-text h1{font-size:17px}}
   `;
