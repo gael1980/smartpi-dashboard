@@ -8,11 +8,12 @@ import {
   type SmartPIDiagnostic,
 } from "../adapter";
 import { readHistory, type HistoryConnection } from "../services/history";
-import { usable, observedEvents, observedTracking, type Sample } from "../utils/timeseries";
+import { usable, observedEvents, observedTracking, valueAt, type Sample } from "../utils/timeseries";
+import { ControlPresentation } from "../utils/control";
 import "./time-chart";
 import "./control-diagram";
 import "./command-chain";
-import type { Curve } from "./time-chart";
+import type { Curve, TimeChart } from "./time-chart";
 const temp: Curve[] = [
   {
     label: "Intérieure mesurée",
@@ -79,6 +80,28 @@ export class VisualDiagnostics extends LitElement {
   @state() private error = "";
   @state() private preferSession = false;
   @state() private followNow = true;
+  @state() private inspection?: { entityId: string; recorder: boolean; time: number };
+  @state() private block?: "pi" | "ff" | "model";
+
+  private async inspectBlock(block: "pi" | "ff" | "model") {
+    this.block = block;
+    if (block !== "model")
+      this.renderRoot.querySelector<TimeChart>(".command-chart smartpi-time-chart")
+        ?.showCurve(`power.${block}_percent`);
+    await this.updateComplete;
+    this.renderRoot.querySelector<HTMLElement>("#block-title")?.focus();
+  }
+
+  private inspect(time: number) {
+    if (!this.diagnostic) return;
+    this.followNow = false;
+    this.inspection = { entityId: this.diagnostic.entityId, recorder: this.usingRecorder, time };
+  }
+  private async inspectEvent(time: number) {
+    this.inspect(time);
+    await this.updateComplete;
+    this.renderRoot.querySelector<HTMLElement>("#inspection-title")?.focus();
+  }
   private filteredCache?: {
     all: Sample[];
     start: number;
@@ -179,6 +202,7 @@ export class VisualDiagnostics extends LitElement {
     this.range = [b - width, b];
   }
   private async load() {
+    this.inspection = undefined;
     const generation = ++this.generation,
       d = this.diagnostic;
     this.loading = true;
@@ -238,6 +262,92 @@ export class VisualDiagnostics extends LitElement {
       </details>
     </section>`;
   }
+  private inspectionPanel(d: SmartPIDiagnostic, sample: Sample | undefined, fromRecorder: boolean) {
+    const snapshot = sample ? {
+      ...d,
+      state: sample.state,
+      available: sample.state !== "unknown" && sample.state !== "unavailable",
+      live: sample.live,
+      history: sample.history,
+    } : d;
+    const route = new ControlPresentation(snapshot).route;
+    const source = sample ? (fromRecorder ? "Recorder" : "Session") : "Instantané SmartPI";
+    const time = sample ? new Date(sample.time * 1000) : d.lastUpdated ? new Date(d.lastUpdated) : null;
+    const format = (value: unknown, unit = "") =>
+      value == null && sample && snapshot.available ? "Non archivé" : display(value, unit);
+    const fields = [
+      ["Température intérieure mesurée", "temperature.indoor", " °C"],
+      ["Consigne filtrée", "setpoint.filtered_setpoint", " °C"],
+      ["Commande demandée", "power.command_percent", " %"],
+      ["Commande appliquée", "power.applied_percent", " %"],
+    ];
+    const block = this.block;
+    const blockButton = (id: "pi" | "ff" | "model", label: string) =>
+      html`<button type="button" aria-pressed=${block === id} aria-controls="block-detail"
+        @click=${() => void this.inspectBlock(id)}>${label}</button>`;
+    const path = route === "direct"
+      ? ["Consigne et mesure", "Hystérésis ou calibration", "Commande publiée", "Pièce"]
+      : ["Consigne et mesure", html`<span>Voies P et I</span> → ${blockButton("pi", "PI")}`,
+          html`+ ${blockButton("ff", "Anticipation")}`, "Limites et temporisation", "Commande publiée", "Pièce"];
+    const blockFields = {
+      pi: [["Contribution PI", "power.pi_percent", " %"]],
+      ff: [["Anticipation retenue", "power.ff_percent", " %"]],
+      model: [["Gain thermique estimé A", "model.a", " °C/min/u"], ["Pertes estimées B", "model.b", " min⁻¹"]],
+    } as const;
+    const twinPath = "analysis.twin.twin_T_steady";
+    const twin = at(snapshot.live, twinPath) == null
+      ? format(undefined)
+      : display(reliableValue(snapshot.live, twinPath, "analysis.twin.twin_T_steady_reliable"), " °C");
+    return html`<section class="synoptic" aria-labelledby="synoptic-title">
+        <h3 id="synoptic-title">Synoptique de régulation</h3>
+        <ol class="signal-path" aria-label=${route === "unavailable" ? "Schéma de référence" : "Voie déclarée"}>
+          ${path.map((label, i) => html`<li class=${route === "unavailable" ? "" : "active-path"}>
+            ${i ? html`<span aria-hidden="true">${i === 2 && route !== "direct" ? "" : "→"}</span>` : nothing}
+            ${label}</li>`)}
+        </ol>
+        <p>${route === "pi" ? "Voie PI active" : route === "direct" ? "Voie directe déclarée" : "Chemin actif non vérifié"}</p>
+        <p>↶ Retour de la mesure · ${blockButton("model", "Modèle thermique")}</p>
+      </section>
+      <aside class="publication" aria-labelledby="inspection-title">
+        <h3 id="inspection-title" tabindex="-1">${sample ? "Publication sélectionnée" : "En direct"}</h3>
+        <p role="status" class="inspection-status">
+          ${source} · ${sample?.observedAt ? "Observation de session" : "Publication"} ·
+          ${time && Number.isFinite(time.valueOf())
+            ? html`<time datetime=${time.toISOString()}>${time.toLocaleString()}</time>`
+            : "Horodatage indisponible"}
+        </p>
+        <dl>
+          <dt>État publié</dt><dd>${snapshot.state}</dd>
+          ${fields.map(([label, path, unit]) => html`<dt>${label}</dt>
+            <dd>${format(sample ? valueAt(sample, path) : at(d.live, path), unit)}</dd>`)}
+          ${sample ? html`<dt>Écart à la consigne filtrée</dt><dd>${format(valueAt(sample, "error"), " °C")}</dd>` : nothing}
+          <dt>État de l’intégrale</dt><dd>${format(at(snapshot.live, "temperature.integral_mode"))}</dd>
+          <dt>Saturation déclarée</dt><dd>${format(at(snapshot.live, "control.saturation_state"))}</dd>
+          <dt>Limitation par temporisation</dt><dd>${format(at(snapshot.live, "analysis.control.forced_by_timing"))}</dd>
+        </dl>
+        <div id="block-detail">
+          ${block ? html`<h4 id="block-title" tabindex="-1">
+              ${{ pi: "Détails PI", ff: "Détails anticipation", model: "Détails du modèle" }[block]}
+            </h4>
+            <dl>${blockFields[block].map(([label, path, unit]) => html`<dt>${label}</dt>
+              <dd>${format(sample ? valueAt(sample, path) : at(d.live, path), unit)}</dd>`)}
+              ${block === "pi" ? html`<dt>Erreur de la voie P</dt>
+                <dd>${format(at(snapshot.live, "analysis.control.error_p"), " °C")}</dd>
+                <dt>Erreur brute de la voie I</dt>
+                <dd>${format(at(snapshot.live, "temperature.error"), " °C")}</dd>` : nothing}
+              ${block === "ff" ? html`<dt>État FF3</dt>
+                <dd>${format(at(snapshot.live, "feedforward.ff3_status"))}</dd>` : nothing}
+              ${block === "model" ? html`<dt>Équilibre estimé par le Twin</dt><dd>${twin}</dd>` : nothing}
+            </dl>` : nothing}
+        </div>
+        <button type="button" aria-disabled=${!sample} @click=${() => { this.inspection = undefined; }}>
+          Revenir au direct
+        </button>
+        <button type="button" @click=${() => this.renderRoot.querySelector<HTMLElement>("#journal-title")?.focus()}>
+          Voir le journal
+        </button>
+      </aside>`;
+  }
   render() {
     const d = this.diagnostic;
     if (!d) return nothing;
@@ -245,8 +355,13 @@ export class VisualDiagnostics extends LitElement {
       all = fromRecorder ? this.recorder : this.session;
     const { samples, events, tracking } = this.windowData(all);
     const liveView = this.tab === "regulation";
+    const supervision = this.tab === "evolution";
+    const point = this.inspection;
+    const selected = supervision && point?.entityId === d.entityId && point.recorder === fromRecorder
+      ? samples.find((sample) => sample.time === point.time)
+      : undefined;
     const chart = (heading: string, curves: Curve[], percent = false) =>
-      html`<section class="chart">
+      html`<section class=${percent ? "chart command-chart" : "chart"}>
         <smartpi-time-chart
           .heading=${heading}
           .samples=${samples}
@@ -254,6 +369,9 @@ export class VisualDiagnostics extends LitElement {
           .range=${this.range}
           .percent=${percent}
           .syncKey=${d.entityId}
+          .inspectable=${supervision}
+          .selectedTime=${selected?.time ?? null}
+          @inspect-publication=${(e: CustomEvent<number>) => this.inspect(e.detail)}
           @time-range=${(e: CustomEvent<[number, number]>) => {
             if (e.detail[1] > e.detail[0]) {
               this.followNow = false;
@@ -280,7 +398,7 @@ export class VisualDiagnostics extends LitElement {
       </div>
       <nav aria-label="Vues de diagnostic">
         ${[
-          ["evolution", "Évolution"],
+          ["evolution", "Supervision"],
           ["regulation", "Régulation en direct"],
           ["model", "Santé du modèle"],
         ].map(
@@ -347,8 +465,10 @@ export class VisualDiagnostics extends LitElement {
           ><input
             type="checkbox"
             .checked=${this.preferSession}
-            @change=${(e: Event) =>
-              (this.preferSession = (e.target as HTMLInputElement).checked)}
+            @change=${(e: Event) => {
+              this.inspection = undefined;
+              this.preferSession = (e.target as HTMLInputElement).checked;
+            }}
           />
           Session uniquement</label
         >
@@ -381,9 +501,10 @@ export class VisualDiagnostics extends LitElement {
           </p>`
         : nothing}`}
       ${this.tab === "evolution"
-        ? html`
+        ? html`<div class="supervision">
+            ${this.inspectionPanel(d, selected, fromRecorder)}
+            <div class="trends">
             ${chart("Température et consigne filtrée", temp)}
-            ${this.trackingPanel(tracking, samples.length)}
             ${chart("Commande du régulateur · pas des watts", power, true)}
             ${chart("Écart consigne filtrée − température intérieure", [
               {
@@ -400,7 +521,8 @@ export class VisualDiagnostics extends LitElement {
               publications irrégulières ; une ligne ne constitue pas une mesure
               intermédiaire.
             </p>
-          `
+            ${this.trackingPanel(tracking, samples.length)}
+            </div></div>`
         : this.tab === "regulation"
           ? html`<section class="pane">
                 <smartpi-control-diagram
@@ -536,7 +658,7 @@ export class VisualDiagnostics extends LitElement {
               </section>
             `}
       ${liveView ? nothing : html`<section class="timeline">
-        <h3>
+        <h3 id="journal-title" tabindex="-1">
           Journal des publications
           <span>${events.length} variations observées</span>
         </h3>
@@ -554,7 +676,10 @@ export class VisualDiagnostics extends LitElement {
                 html`<li>
                   <time>${new Date(e.time * 1000).toLocaleString()}</time>
                   <div>
-                    <strong>${e.label}</strong>${this.expert
+                    ${supervision
+                      ? html`<button type="button" aria-pressed=${selected?.time === e.time}
+                          @click=${() => void this.inspectEvent(e.time)}>${e.label}</button>`
+                      : html`<strong>${e.label}</strong>`}${this.expert
                       ? html`<p>${e.provenance}</p>`
                       : nothing}
                   </div>
@@ -705,6 +830,23 @@ export class VisualDiagnostics extends LitElement {
       font-size: 12px;
       line-height: 1.6;
       margin: 14px 24px;
+    }
+    .supervision {
+      display: grid;
+      grid-template-columns: minmax(0, 3fr) minmax(220px, 1fr);
+      grid-template-areas: "synoptic synoptic" "trends publication";
+    }
+    .synoptic { grid-area: synoptic; padding: 12px 24px; border-bottom: 1px solid var(--divider-color); }
+    .trends { grid-area: trends; min-width: 0; }
+    .publication { grid-area: publication; padding: 12px 18px; border-inline-start: 1px solid var(--divider-color); }
+    .publication dt, .inspection-status, .synoptic p { color: var(--secondary-text-color); font-size: 13px; }
+    .publication dd { margin: 4px 0 12px; overflow-wrap: anywhere; }
+    .signal-path { display: flex; flex-wrap: wrap; gap: 8px; }
+    .signal-path li { border: 1px solid var(--divider-color); border-radius: 6px; padding: 8px; }
+    .signal-path .active-path, .timeline button[aria-pressed="true"] { border-color: var(--primary-color); }
+    @media (max-width: 760px) {
+      .supervision { grid-template-columns: minmax(0, 1fr); grid-template-areas: "trends" "publication" "synoptic"; }
+      .publication { border-inline-start: 0; }
     }
     .model-heading {
       display: flex;

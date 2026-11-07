@@ -18,6 +18,8 @@ export class TimeChart extends LitElement {
   @property() heading = "";
   @property() syncKey = "smartpi";
   @property({ type: Boolean }) percent = false;
+  @property({ type: Boolean }) inspectable = false;
+  @property({ attribute: false }) selectedTime: number | null = null;
   private lastSamples?: Sample[];
   private lastSignature = "";
   private plot?: uPlot;
@@ -26,6 +28,7 @@ export class TimeChart extends LitElement {
   private themeMedia = matchMedia("(prefers-color-scheme: dark)");
   private themeChange = () => this.draw();
   private hiddenCurves = new Set<string>();
+  private pointerStart?: number;
   connectedCallback() {
     super.connectedCallback();
     this.themeMedia.addEventListener("change", this.themeChange);
@@ -42,7 +45,7 @@ export class TimeChart extends LitElement {
     this.plot?.destroy();
     this.plot = undefined;
   }
-  protected updated() {
+  protected updated(changed: Map<string, unknown>) {
     const signature = JSON.stringify([
       this.curves,
       this.heading,
@@ -50,11 +53,19 @@ export class TimeChart extends LitElement {
       this.percent,
       this.range,
     ]);
-    if (this.lastSamples === this.samples && this.lastSignature === signature)
+    if (this.lastSamples === this.samples && this.lastSignature === signature) {
+      if (changed.has("selectedTime")) this.plot?.redraw(false, false);
       return;
+    }
     this.lastSamples = this.samples;
     this.lastSignature = signature;
     this.draw();
+  }
+  private inspect(time: number) {
+    if (this.inspectable)
+      this.dispatchEvent(new CustomEvent("inspect-publication", {
+        detail: time, bubbles: true, composed: true,
+      }));
   }
   private toggleSeries(index: number) {
     const label = this.curves[index].label;
@@ -63,6 +74,11 @@ export class TimeChart extends LitElement {
     if (show) this.hiddenCurves.delete(label);
     else this.hiddenCurves.add(label);
     this.requestUpdate();
+  }
+  showCurve(path: string) {
+    const index = this.curves.findIndex((curve) => curve.path === path);
+    if (index >= 0 && this.hiddenCurves.has(this.curves[index].label))
+      this.toggleSeries(index);
   }
   private draw() {
     if (!this.isConnected) return;
@@ -158,6 +174,21 @@ export class TimeChart extends LitElement {
           })),
         ],
         hooks: {
+          draw: [(u) => {
+            if (this.selectedTime === null) return;
+            const { left, top, width, height } = u.bbox;
+            const x = u.valToPos(this.selectedTime, "x", true);
+            if (x < left || x > left + width) return;
+            const ctx = u.ctx;
+            ctx.save();
+            ctx.strokeStyle = text;
+            ctx.setLineDash([5, 4]);
+            ctx.beginPath();
+            ctx.moveTo(x, top);
+            ctx.lineTo(x, top + height);
+            ctx.stroke();
+            ctx.restore();
+          }],
           setSeries: [
             (u) => {
               if (u.status !== 1 || u !== this.plot) return;
@@ -227,7 +258,18 @@ export class TimeChart extends LitElement {
             </button>`,
         )}
       </div>
-      <div class="plot" aria-label=${this.heading}></div>
+      <div class="plot" aria-label=${this.heading}
+        @pointerdown=${(event: PointerEvent) => {
+          this.pointerStart = event.button === 0 ? event.clientX : undefined;
+        }}
+        @click=${{ capture: true, handleEvent: (event: MouseEvent) => {
+          const plot = this.plot;
+          if (!plot || !event.composedPath().includes(plot.over) ||
+              this.pointerStart === undefined || Math.abs(event.clientX - this.pointerStart) > 4)
+            return;
+          const time = plot.data[0][plot.posToIdx(event.clientX - plot.over.getBoundingClientRect().left)];
+          if (time !== undefined) this.inspect(time);
+        } }}></div>
       ${!count
         ? html`<p>Aucune valeur disponible pour cette fenêtre.</p>`
         : html`<details>
@@ -248,7 +290,10 @@ export class TimeChart extends LitElement {
                   ${this.samples.slice(-200).map(
                     (s) =>
                       html`<tr>
-                        <td>${new Date(s.time * 1000).toLocaleString()}</td>
+                        <td>${this.inspectable
+                          ? html`<button type="button" aria-pressed=${s.time === this.selectedTime}
+                              @click=${() => this.inspect(s.time)}>${new Date(s.time * 1000).toLocaleString()}</button>`
+                          : new Date(s.time * 1000).toLocaleString()}</td>
                         ${this.curves.map(
                           (c) =>
                             html`<td>

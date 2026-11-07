@@ -161,6 +161,81 @@ try {
     `const charts=[...root.querySelectorAll('smartpi-time-chart')];return {gaps:charts[0].plot.data[1].some(x=>x===null),fullRange:charts[1].plot.scales.y.max>100&&charts[1].plot.scales.y.min<0,source:root.textContent.includes('Recorder · historique persistant'),event:root.textContent.includes('Consigne filtrée 19 → 20')};`,
   );
   assert.ok(Object.values(checks.science).every(Boolean));
+  checks.inspection = await run(`
+    const event = [...root.querySelectorAll('.timeline button')].find(b => b.textContent.includes('Consigne filtrée 19 → 20'));
+    event.click();
+    await v.updateComplete;
+    const charts = [...root.querySelectorAll('smartpi-time-chart')];
+    await Promise.all(charts.map(c => c.updateComplete));
+    const time = charts[0].selectedTime;
+    const aligned = charts.every(c => c.selectedTime === time);
+    const panel = root.querySelector('.publication');
+    const recorder = panel.querySelector('time').dateTime === new Date(time * 1000).toISOString()
+      && panel.textContent.includes('Recorder') && panel.textContent.includes('Non archivé')
+      && !root.querySelector('.active-path');
+    const gap = charts[0].samples.find(s => s.state === 'unavailable');
+    charts[0].dispatchEvent(new CustomEvent('inspect-publication', { detail: gap.time, bubbles: true, composed: true }));
+    await v.updateComplete;
+    const unavailable = panel.textContent.includes('Indisponible') && !root.querySelector('.active-path');
+    panel.querySelector('button').click();
+    await v.updateComplete;
+    const direct = panel.textContent.includes('Instantané SmartPI');
+    const over = charts[0].shadowRoot.querySelector('.u-over');
+    const x = Math.round(over.getBoundingClientRect().left + charts[0].plot.valToPos(time, 'x'));
+    const clickedTime = charts[0].plot.data[0][charts[0].plot.posToIdx(x - over.getBoundingClientRect().left)];
+    let emitted;
+    charts[0].addEventListener('inspect-publication', e => emitted = e.detail, { once: true });
+    over.dispatchEvent(new PointerEvent('pointerdown', { clientX: x, button: 0, bubbles: true }));
+    over.dispatchEvent(new MouseEvent('click', { clientX: x, bubbles: true }));
+    await v.updateComplete;
+    const click = panel.querySelector('time').dateTime === new Date(clickedTime * 1000).toISOString();
+    if (!click) throw Error(JSON.stringify({x, time, clickedTime, emitted, pointerStart: charts[0].pointerStart, current: panel.querySelector('time').dateTime, inspection:v.inspection, samePlot:over===charts[0].plot.over}));
+    panel.querySelector('button').click();
+    await v.updateComplete;
+    return { aligned, recorder, unavailable, direct, click };
+  `);
+  assert.ok(Object.values(checks.inspection).every(Boolean));
+  checks.blockDetails = await run(`
+    const chart = root.querySelector('.command-chart smartpi-time-chart');
+    const buttons = [...root.querySelectorAll('.synoptic button')];
+    const block = (label) => buttons.find(b => b.textContent.trim() === label);
+    for (const [label, series, detail] of [['PI', 3, 'Contribution PI'], ['Anticipation', 4, 'Anticipation retenue']]) {
+      chart.shadowRoot.querySelectorAll('.series-controls button')[series - 1].click();
+      if (chart.plot.series[series].show !== false) return false;
+      block(label).click();
+      await v.updateComplete;
+      if (!chart.plot.series[series].show || !root.querySelector('#block-detail').textContent.includes(detail)) return false;
+    }
+    block('Modèle thermique').click();
+    await v.updateComplete;
+    return root.querySelector('#block-detail').textContent.includes('Pertes estimées B');
+  `);
+  assert.ok(checks.blockDetails);
+  checks.sessionCalibration = await run(`
+    const session = v.session;
+    const time = v.range[1] - 30;
+    v.session = [{ time, state: 'calibration', observedAt: true,
+      history: { power: { applied_percent: 0 } },
+      live: { control: { phase: 'Calibration' } } }];
+    v.preferSession = true;
+    await v.updateComplete;
+    const chart = root.querySelectorAll('smartpi-time-chart')[1];
+    await chart.updateComplete;
+    const button = chart.shadowRoot.querySelector('tbody button');
+    chart.shadowRoot.querySelector('details').open = true;
+    button.focus();
+    button.click();
+    await v.updateComplete;
+    const panel = root.querySelector('.publication');
+    const verified = panel.textContent.includes('Observation de session') && panel.textContent.includes('0 %')
+      && root.querySelector('.synoptic').textContent.includes('Voie directe déclarée');
+    panel.querySelector('button').click();
+    v.session = session;
+    v.preferSession = false;
+    await v.updateComplete;
+    return verified;
+  `);
+  assert.ok(checks.sessionCalibration);
   await run(
     `const c=root.querySelector('smartpi-time-chart'),over=c.shadowRoot.querySelector('.u-over'),r=over.getBoundingClientRect();over.dispatchEvent(new MouseEvent('mousemove',{clientX:r.left+100,clientY:r.top+80,bubbles:true}));`,
   );

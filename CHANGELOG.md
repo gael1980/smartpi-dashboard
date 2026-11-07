@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.3 — 2026-11-07
+
+- Vue Supervision avec synoptique, tendances et inspection synchronisée.
+- Accès aux détails PI, anticipation et modèle depuis le synoptique.
+
 ## 0.2.2 — 2026-11-07
 
 - Sélection de thermostat plus compacte et horodatage local de la publication.

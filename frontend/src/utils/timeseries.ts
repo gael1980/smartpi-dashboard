@@ -20,6 +20,7 @@ export const HISTORY_PATHS = [
 ] as const;
 export interface Sample {
   time: number;
+  observedAt?: boolean;
   state: string;
   history: Rec;
   live: Rec;
@@ -196,6 +197,7 @@ export class SessionHistory {
       const seenTime = samples.length === 0 ? now : time;
       const next = {
         time: seenTime,
+        observedAt: samples.length === 0,
         state: d.state,
         history: d.available ? d.history : {},
         live: d.live,
