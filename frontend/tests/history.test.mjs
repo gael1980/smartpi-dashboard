@@ -247,3 +247,41 @@ test("unknown calibration state does not invent a direct path", () => {
   assert.equal(v.bypass, false);
   assert.equal(v.route, "unavailable");
 });
+
+test("live block details keep measured, published and guarded values distinct", () => {
+  const d = {
+    available: true,
+    live: {
+      control: { mode: "smartpi", in_deadband: true },
+      temperature: { error: 0.2 },
+      power: { pi_percent: 0, ff_percent: 14, command_percent: 14 },
+      model: { tau_min: 9999, tau_reliable: false },
+      analysis: {
+        control: { error_p: 0, aw_du: 0, forced_by_timing: false },
+        feedforward: { u_ff_effective: 0.19 },
+        twin: { twin_model_reliable: true, twin_warming_up: false, twin_T_pred: 19.2, twin_T_steady_reliable: false, twin_T_steady: 23 },
+      },
+    },
+  };
+  const view = new ControlPresentation(d);
+  const block = (id) => view.blocks().find((b) => b.id === id);
+  const field = (id, path) => view.detail(block(id), true).find((r) => r.path === path)?.value;
+  assert.equal(block("pi").value, "0 %");
+  assert.equal(field("pi", "analysis.control.error_p"), "0 °C");
+  assert.equal(field("pi", "temperature.error"), "0,2 °C");
+  assert.equal(block("ff").value, "14 %");
+  assert.equal(field("ff", "analysis.feedforward.u_ff_effective"), "0,19 (ratio)");
+  assert.equal(field("limits", "analysis.control.forced_by_timing"), "Non");
+  assert.equal(field("model", "model.tau_min"), "Indisponible");
+  assert.equal(field("model", "analysis.twin.twin_T_pred"), "19,2 °C");
+  assert.equal(field("model", "analysis.twin.twin_T_steady"), "Indisponible");
+  d.live.analysis.twin.twin_warming_up = true;
+  assert.equal(field("model", "analysis.twin.twin_T_pred"), "Indisponible");
+  d.live.calibration = { state: "HeatUp" };
+  assert.equal(field("command", "power.pi_percent"), undefined);
+  assert.equal(field("command", "calibration.state"), "HeatUp");
+  assert.equal(block("limits").status, "Contourné");
+  d.available = false;
+  assert.equal(view.route, "unavailable");
+  assert.equal(field("pi", "analysis.control.error_p"), "Indisponible");
+});

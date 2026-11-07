@@ -54,6 +54,7 @@
             indoor: 19.2,
             outdoor: 8,
             integral_mode: "I:HOLD(deadtime)",
+            error: 0.8,
           },
           setpoint: { filtered_setpoint: 20 },
           power: {
@@ -74,6 +75,7 @@
             deadtime_heat_reliable: true,
           },
           analysis: {
+            control: { error_p: 0.5, aw_du: 0, forced_by_timing: false },
             feedforward: {
               u_ff1: 0.18,
               u_ff2: -0.04,

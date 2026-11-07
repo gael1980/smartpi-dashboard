@@ -11,10 +11,12 @@ Panneau scientifique **en lecture seule** pour comprendre SmartPI dans Home Assi
 
 ## État du développement
 
-**Version 0.2.0** : panneau natif avec graphiques température/consigne, commandes,
+**Version 0.2.1** : panneau natif avec graphiques température/consigne, commandes,
 écart filtré et modèle A/B sur 1–48 h. Zoom, déplacement, curseurs synchronisés,
 légende interactive, tables accessibles, schéma logique cliquable et chaîne U.
 Les vues Évolution, Régulation et Santé du modèle proposent un mode expert.
+Le schéma relie chaque bloc aux signaux et motifs publiés, dont les erreurs P et I,
+les gains, l’anti-windup et les contraintes de cycle.
 
 Lecture Recorder via la session authentifiée de Home Assistant ; repli explicite
 sur un historique de session en mémoire si les données sont absentes ou refusées.

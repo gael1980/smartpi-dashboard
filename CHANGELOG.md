@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.1 — 2026-11-07
+
+- Fiches dans « Le régulateur, en direct » : erreurs P/I, état intégral, gains,
+  anticipation, contraintes, cycles et modèle avec leur provenance publiée.
+- Le schéma distingue le chemin actif, les blocs contournés et le retour de
+  mesure ; les valeurs absentes et estimations non fiables restent indisponibles.
+
 ## 0.2.0 — 2026-11-06
 
 - Courbes Recorder natives sur 1, 3, 6, 12, 24 et 48 h : température, consigne

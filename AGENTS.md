@@ -50,3 +50,28 @@ ne pas en installer des copies en double dans le dépôt.
 Choisir selon la tâche, lire les instructions avant application, conserver les
 contraintes de lecture seule et ne pas prétendre à une certification scientifique
 ou d'accessibilité à partir de la seule utilisation d'une skill.
+
+## Fondement académique, publication et installation
+
+- Pour une évolution de la compréhension ou de l’évaluation du PI, consulter
+  `ecc:scientific-thinking-literature-review`. Appuyer les méthodes sur des
+  publications académiques primaires. Vérifier séparément ce que SmartPI
+  calcule et ce que son schéma publie. La littérature ne valide pas à elle
+  seule le réglage d'une pièce ni l’utilisabilité du panneau.
+- Dans « Le régulateur, en direct », rendre lisibles le chemin actif, les
+  signaux, leurs unités et les motifs publiés. Préserver le sens des erreurs
+  P/I, des chemins directs et des drapeaux de fiabilité. Pour toute future
+  mesure historique, documenter la référence, la couverture et les exclusions.
+- Avant un push demandé : vérifier le dépôt, le diff et le bundle reproductible ;
+  exécuter typage, tests Node et Python, build et tests navigateur sur fixtures.
+  Vérifier le SHA distant, puis attendre la CI du commit si l’installation est
+  conditionnée à des contrôles réussis.
+- Un déploiement SSH est autorisé seulement sur demande explicite. Utiliser la
+  cible validée et une clé d’hôte connue, sauvegarder le composant installé,
+  vérifier les sommes du paquet préparé depuis le commit publié, puis vérifier
+  la version servie et le chargement du panneau. En cas d’échec, conserver une
+  voie de restauration. Limiter les écritures à `custom_components/smartpi_dashboard/`
+  et à sa sauvegarde ; recharger ou redémarrer uniquement si nécessaire pour
+  l’installation autorisée. Aucune action de régulation n’en découle.
+- Conserver les coordonnées de l’instance et les preuves privées dans le
+  workspace local, jamais dans le dépôt. Ne pas conserver de secrets.

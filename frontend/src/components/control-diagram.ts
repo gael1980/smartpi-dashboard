@@ -1,6 +1,6 @@
 import { LitElement, html, svg, css } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
-import { type SmartPIDiagnostic, display, at } from "../adapter";
+import { type SmartPIDiagnostic } from "../adapter";
 import { ControlPresentation } from "../utils/control";
 @customElement("smartpi-control-diagram")
 export class ControlDiagram extends LitElement {
@@ -12,6 +12,11 @@ export class ControlDiagram extends LitElement {
     const view = new ControlPresentation(this.diagnostic),
       blocks = view.blocks(),
       chosen = blocks.find((b) => b.id === this.selected) ?? blocks[0];
+    const updated = this.diagnostic.lastUpdated;
+    const time = updated ? new Date(updated) : null;
+    const timestamp = this.diagnostic.available && time && Number.isFinite(time.valueOf())
+      ? html`Dernière mise à jour du capteur : <time datetime=${time.toISOString()}>${new Intl.DateTimeFormat("fr-FR", {dateStyle: "short", timeStyle: "medium"}).format(time)}</time>`
+      : "Horodatage des données actuelles indisponible";
     const positions = [
       [20, 20],
       [20, 155],
@@ -36,8 +41,8 @@ export class ControlDiagram extends LitElement {
         >
       </div>
       <p class="muted">
-        Relations logiques SmartPI — pas des flux de chaleur mesurés. Les
-        priorités externes HA ne sont pas entièrement décrites par ce schéma.
+        ${timestamp}. Les flèches pleines montrent le chemin logique déclaré.
+        Les pointillés représentent le retour de la pièce par la mesure.
       </p>
       <div class="diagram">
         <svg
@@ -59,19 +64,20 @@ export class ControlDiagram extends LitElement {
             </marker>
           </defs>
           ${view.route === "pi"
-            ? svg`<path class="flow" d="M205 65 H235 M205 195 H220 V95 H235 M420 65 H435 V115 H450 M420 195 H435 V145 H450"/>`
+            ? svg`<path class="flow" d="M205 65 H235"/><path class="flow" d="M205 195 H220 V95 H235"/><path class="flow" d="M420 65 H435 V115 H450"/><path class="flow" d="M420 195 H435 V145 H450"/>`
             : view.bypass
-              ? svg`<path class="flow bypass" d="M205 65 H440 V100 H450 M635 125 H647 V310 H660"/>`
+              ? svg`<path class="flow bypass" d="M205 65 H220 V10 H440 V100 H450"/><path class="flow bypass" d="M205 195 H220 V132 H450"/><path class="flow bypass" d="M635 125 H647 V310 H660"/>`
               : null}
           ${view.route === "pi"
-            ? svg`<path class="flow" d="M635 125 H660 M752 180 V265"/>`
+            ? svg`<path class="flow" d="M635 125 H660"/><path class="flow" d="M752 170 V265"/>`
             : null}
-          <path class="flow" d="M660 315 H420 M235 345 H110 V245" />
+          <path class="flow feedback" d="M660 315 H420" />
+          <path class="flow feedback" d="M235 345 H110 V245" />
           ${blocks.map(
             (
               b,
               i,
-            ) => svg`<g role="button" tabindex="0" aria-label=${`${b.title} : ${b.value}. ${b.status}`} class=${"block " + (b.id === chosen.id ? "selected" : "") + (b.status === "Contourné" ? " inactive" : "")} transform=${`translate(${positions[i][0]},${positions[i][1]})`} @click=${() => (this.selected = b.id)} @keydown=${(
+            ) => svg`<g role="button" tabindex="0" aria-pressed=${b.id === chosen.id} aria-label=${`${b.title} : ${b.value}. ${b.status}`} class=${"block " + (b.id === chosen.id ? "selected" : "") + (b.status === "Contourné" ? " inactive" : "")} transform=${`translate(${positions[i][0]},${positions[i][1]})`} @click=${() => (this.selected = b.id)} @keydown=${(
               e: KeyboardEvent,
             ) => {
               if (e.key === "Enter" || e.key === " ") {
@@ -97,27 +103,18 @@ export class ControlDiagram extends LitElement {
       </div>
       <aside aria-live="polite">
         <h4>${chosen.title} <span class="badge">${chosen.status}</span></h4>
-        <p>${chosen.explanation}</p>
-        <p>Raison / contexte publié : <strong>${chosen.reason}</strong></p>
-        ${this.expert
-          ? html`<code>attributes.live.${chosen.path}</code>
-              <p>
-                Source : SmartPI Diagnostics v2. Les informations absentes ne
-                sont pas reconstituées.
-              </p>
-              <p>
-                Bande morte :
-                ${display(at(this.diagnostic.live, "control.in_deadband"))} ·
-                Temps mort :
-                ${display(
-                  at(this.diagnostic.live, "control.in_deadtime_window"),
-                )}
-                · Gouvernance :
-                ${display(
-                  at(this.diagnostic.live, "governance.thermal_update_reason"),
-                )}
-              </p>`
-          : null}
+        <p><b>Principe.</b> ${chosen.explanation}</p>
+        <dl>
+          <div><dt>Valeur du bloc</dt><dd>${chosen.value}</dd>
+            ${this.expert ? html`<code>attributes.live.${chosen.path}</code>` : null}</div>
+          <div><dt>Motif ou contexte publié</dt><dd>${chosen.reason}</dd>
+            ${this.expert ? html`<code>attributes.live.${chosen.reasonPath}</code>` : null}</div>
+          ${view.detail(chosen, this.expert).map((row) => html`<div>
+            <dt>${row.label}</dt><dd>${row.value}</dd>
+            ${this.expert ? html`<code>attributes.live.${row.path}</code>${row.reliability ? html`<code>Fiabilité : ${row.reliability}</code>` : null}` : null}
+          </div>`)}
+        </dl>
+        ${chosen.status === "Contourné" ? html`<p class="muted">Ce bloc est hors du chemin actif. Ses valeurs publiées ne décrivent pas la commande directe.</p>` : null}
       </aside>`;
   }
   static styles = css`
@@ -161,12 +158,16 @@ export class ControlDiagram extends LitElement {
     }
     .flow {
       fill: none;
-      stroke: var(--secondary-text-color);
+      stroke: var(--primary-color);
       stroke-width: 2;
       marker-end: url(#arrow);
     }
     .bypass {
-      stroke: #ce8d2c;
+      stroke: var(--warning-color, #ce8d2c);
+    }
+    .feedback {
+      stroke: var(--secondary-text-color);
+      stroke-dasharray: 4 4;
     }
     .block {
       cursor: pointer;
@@ -210,9 +211,23 @@ export class ControlDiagram extends LitElement {
       min-height: 120px;
     }
     code {
+      display: block;
       font-size: 11px;
       overflow-wrap: anywhere;
     }
+    dl {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(min(100%, 13rem), 1fr));
+      gap: 12px 18px;
+      margin: 14px 0 0;
+    }
+    dl > div {
+      border-top: 1px solid var(--divider-color);
+      padding-top: 7px;
+      overflow-wrap: anywhere;
+    }
+    dt { color: var(--secondary-text-color); font-size: 12px; }
+    dd { margin: 3px 0; font-weight: 600; }
     .mobile {
       display: none;
     }

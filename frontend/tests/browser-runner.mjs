@@ -183,6 +183,10 @@ try {
   assert.equal(checks.diagram.blocks, 8);
   assert.ok(checks.diagram.provenance);
   assert.ok(checks.diagram.chain);
+  checks.piDetail = await run(
+    `const d=root.querySelector('smartpi-control-diagram'),b=d.shadowRoot.querySelectorAll('g[role="button"]')[2];b.focus();b.dispatchEvent(new KeyboardEvent('keydown',{key:' ',bubbles:true}));await d.updateComplete;const detail=d.shadowRoot.querySelector('aside').textContent;return b.getAttribute('aria-pressed')==='true'&&d.shadowRoot.activeElement===b&&detail.includes('0,5 °C')&&detail.includes('0,8 °C')&&detail.includes('attributes.live.analysis.control.error_p')&&!!d.shadowRoot.querySelector('time[datetime]');`,
+  );
+  assert.ok(checks.piDetail);
   await run(`root.querySelector('smartpi-control-diagram').scrollIntoView();`);
   await settle();
   await send("Page.captureScreenshot", {
@@ -238,6 +242,13 @@ try {
     );
     assert.equal(checks.mobileViews[tab], 390);
   }
+  await run(`v.tab='regulation';await v.updateComplete;const d=root.querySelector('smartpi-control-diagram');await d.updateComplete;d.shadowRoot.querySelectorAll('.mobile button')[4].click();await d.updateComplete;d.shadowRoot.querySelector('aside').scrollIntoView({block:'center'});`);
+  await settle();
+  checks.mobileDirectDetail = await run(`const d=root.querySelector('smartpi-control-diagram'),detail=d.shadowRoot.querySelector('aside').textContent;return detail.includes('État de l’hystérésis')&&!detail.includes('Sortie PI publiée')&&d.shadowRoot.querySelectorAll('.block.inactive').length===3&&document.documentElement.scrollWidth===390;`);
+  assert.ok(checks.mobileDirectDetail);
+  await send("Page.captureScreenshot", { format: "png", captureBeyondViewport: false }).then((r) =>
+    writeFile(output + "/diagram-mobile.png", Buffer.from(r.data, "base64")),
+  );
   await run(`window.historyMode='error';await v.load();`);
   await settle();
   checks.permission = await run(
