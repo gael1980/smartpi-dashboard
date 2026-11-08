@@ -66,7 +66,6 @@ npm run build
 Sources de référence :
 - https://github.com/KipK/vtherm_smartpi/blob/master/documentation/en/diagnostics.md
 - https://github.com/gael1980/smartpi-dash
-- https://github.com/Liquidmasl/vtherm_dashboard
 - https://developers.home-assistant.io/docs/frontend/custom-ui/
 - https://contributors.home-assistant.io/marketplace/guides/integrations/
 
