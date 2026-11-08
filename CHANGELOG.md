@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.4 — 2026-11-08
+
+- Vue en direct avec mesure, consigne filtrée, demande et sortie appliquée.
+- Chemin PI ou direct, motif publié et inspection des signaux et des cycles.
+- Schéma complet et chaîne de commande à la demande.
+- Raccourci de Supervision avec sélection uniquement si la publication existe
+  à l’horodatage attendu dans la source et la fenêtre affichées.
+
 ## 0.2.3 — 2026-11-07
 
 - Vue Supervision avec synoptique, tendances et inspection synchronisée.

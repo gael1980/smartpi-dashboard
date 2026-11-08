@@ -8,7 +8,7 @@ import {
   type SmartPIDiagnostic,
 } from "../adapter";
 import { readHistory, type HistoryConnection } from "../services/history";
-import { usable, observedEvents, observedTracking, valueAt, type Sample } from "../utils/timeseries";
+import { usable, observedEvents, observedTracking, timestamp, valueAt, type Sample } from "../utils/timeseries";
 import { ControlPresentation } from "../utils/control";
 import "./time-chart";
 import "./control-diagram";
@@ -81,6 +81,7 @@ export class VisualDiagnostics extends LitElement {
   @state() private preferSession = false;
   @state() private followNow = true;
   @state() private inspection?: { entityId: string; recorder: boolean; time: number };
+  @state() private livePublicationMissing = false;
   @state() private block?: "pi" | "ff" | "model";
 
   private async inspectBlock(block: "pi" | "ff" | "model") {
@@ -94,11 +95,25 @@ export class VisualDiagnostics extends LitElement {
 
   private inspect(time: number) {
     if (!this.diagnostic) return;
+    this.livePublicationMissing = false;
     this.followNow = false;
     this.inspection = { entityId: this.diagnostic.entityId, recorder: this.usingRecorder, time };
   }
   private async inspectEvent(time: number) {
     this.inspect(time);
+    await this.updateComplete;
+    this.renderRoot.querySelector<HTMLElement>("#inspection-title")?.focus();
+  }
+  private async openLivePublication() {
+    const time = timestamp(this.diagnostic?.lastUpdated);
+    const source = this.usingRecorder ? this.recorder : this.session;
+    const match = this.diagnostic?.available && time !== null
+      ? this.windowData(source).samples.find((sample) => !sample.observedAt && sample.time === time)
+      : undefined;
+    this.tab = "evolution";
+    this.inspection = undefined;
+    this.livePublicationMissing = !match;
+    if (match) this.inspect(match.time);
     await this.updateComplete;
     this.renderRoot.querySelector<HTMLElement>("#inspection-title")?.focus();
   }
@@ -163,6 +178,7 @@ export class VisualDiagnostics extends LitElement {
     ) {
       this.recorder = [];
       this.preferSession = false;
+      this.livePublicationMissing = false;
       this.reset();
       void this.load();
     }
@@ -203,6 +219,7 @@ export class VisualDiagnostics extends LitElement {
   }
   private async load() {
     this.inspection = undefined;
+    this.livePublicationMissing = false;
     const generation = ++this.generation,
       d = this.diagnostic;
     this.loading = true;
@@ -406,7 +423,7 @@ export class VisualDiagnostics extends LitElement {
             html`<button
               class=${this.tab === id ? "active" : ""}
               aria-pressed=${this.tab === id}
-              @click=${() => (this.tab = id)}
+              @click=${() => { this.livePublicationMissing = false; this.tab = id; }}
             >
               ${label}
             </button>`,
@@ -451,8 +468,8 @@ export class VisualDiagnostics extends LitElement {
             Actualiser Recorder
           </button>
         </div>
-      </div>
-      <div class="source">
+      </div>`}
+      ${liveView ? nothing : html`<div class="source">
         <strong
           >${fromRecorder
             ? "Recorder · historique persistant"
@@ -467,6 +484,7 @@ export class VisualDiagnostics extends LitElement {
             .checked=${this.preferSession}
             @change=${(e: Event) => {
               this.inspection = undefined;
+              this.livePublicationMissing = false;
               this.preferSession = (e.target as HTMLInputElement).checked;
             }}
           />
@@ -499,6 +517,9 @@ export class VisualDiagnostics extends LitElement {
             Aucune publication dans cette fenêtre. Sélectionner une plage plus
             large ou attendre une mise à jour normale de Home Assistant.
           </p>`
+        : nothing}
+      ${supervision && this.livePublicationMissing
+        ? html`<p class="notice" role="status">La publication du direct est introuvable dans la source et la fenêtre affichées. L’inspecteur affiche l’instantané actuel.</p>`
         : nothing}`}
       ${this.tab === "evolution"
         ? html`<div class="supervision">
@@ -529,10 +550,13 @@ export class VisualDiagnostics extends LitElement {
                   .diagnostic=${d}
                   .expert=${this.expert}
                 ></smartpi-control-diagram>
+                <button class="open-supervision" type="button"
+                  @click=${() => void this.openLivePublication()}>Voir dans Supervision</button>
               </section>
-              <section class="pane">
+              <details class="pane chain-details">
+                <summary>Chaîne de commande détaillée</summary>
                 <smartpi-command-chain .diagnostic=${d}></smartpi-command-chain>
-              </section>`
+              </details>`
           : html`
               <div class="model-heading">
                 <h3>Modèle appris</h3>
@@ -819,6 +843,8 @@ export class VisualDiagnostics extends LitElement {
       background: var(--secondary-background-color);
       font-size: 13px;
     }
+    .open-supervision, .chain-details summary { min-height: 44px; }
+    .chain-details summary { cursor: pointer; }
     .chart,
     .pane {
       padding: 22px 24px;

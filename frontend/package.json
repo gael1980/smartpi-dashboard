@@ -1,7 +1,7 @@
 {
   "name": "smartpi-dashboard-frontend",
   "private": true,
-  "version": "0.2.3",
+  "version": "0.2.4",
   "type": "module",
   "scripts": {
     "build": "esbuild src/main.ts --bundle --format=esm --target=es2022 --minify --loader:.css=text --outfile=../custom_components/smartpi_dashboard/frontend/smartpi-dashboard.js",

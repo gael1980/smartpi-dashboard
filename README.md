@@ -11,13 +11,17 @@ Panneau scientifique **en lecture seule** pour comprendre SmartPI dans Home Assi
 
 ## État du développement
 
-**Version 0.2.3** : panneau natif avec graphiques température/consigne, commandes,
+**Version 0.2.4** : panneau natif avec graphiques température/consigne, commandes,
 écart filtré et modèle A/B sur 1–48 h. Zoom, déplacement, curseurs synchronisés,
 légende interactive, tables accessibles, schéma logique cliquable et chaîne U.
 Les vues Supervision, Régulation en direct et Santé du modèle proposent un mode expert.
 La vue Supervision relie le synoptique, le journal et les tendances à un
 inspecteur de publications. Elle indique le nombre de couples valides et décrit l’écart à la
 consigne filtrée sur les publications de la fenêtre sélectionnée.
+En direct, un bandeau réunit la mesure, la consigne filtrée et les deux
+commandes. Le chemin actif, le motif publié et les cycles se lisent dans
+l’inspecteur. « Voir dans Supervision » recherche la même publication dans la
+source et la fenêtre affichées.
 Le schéma relie chaque bloc aux signaux et motifs publiés, dont les erreurs P et I,
 les gains, l’anti-windup et les contraintes de cycle.
 

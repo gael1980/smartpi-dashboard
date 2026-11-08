@@ -262,7 +262,7 @@ try {
   await run(`v.tab='regulation';v.expert=true;`);
   await settle();
   checks.diagram = await run(
-    `const d=root.querySelector('smartpi-control-diagram'),b=d.shadowRoot.querySelector('[role="button"]');b.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}));await d.updateComplete;return {blocks:d.shadowRoot.querySelectorAll('[role="button"]').length,provenance:d.shadowRoot.textContent.includes('attributes.live.setpoint.filtered_setpoint'),chain:root.querySelector('smartpi-command-chain').shadowRoot.textContent.includes('-4 %')};`,
+    `const d=root.querySelector('smartpi-control-diagram'),s=d.shadowRoot;s.querySelector('summary').click();const b=s.querySelector('[role="button"]');b.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}));await d.updateComplete;return {blocks:s.querySelectorAll('[role="button"]').length,provenance:s.textContent.includes('attributes.live.setpoint.filtered_setpoint'),chain:root.querySelector('smartpi-command-chain').shadowRoot.textContent.includes('-4 %')};`,
   );
   assert.equal(checks.diagram.blocks, 8);
   assert.ok(checks.diagram.provenance);
@@ -271,8 +271,36 @@ try {
     `const d=root.querySelector('smartpi-control-diagram'),b=d.shadowRoot.querySelectorAll('g[role="button"]')[2];b.focus();b.dispatchEvent(new KeyboardEvent('keydown',{key:' ',bubbles:true}));await d.updateComplete;const detail=d.shadowRoot.querySelector('aside').textContent;return b.getAttribute('aria-pressed')==='true'&&d.shadowRoot.activeElement===b&&detail.includes('0,5 °C')&&detail.includes('0,8 °C')&&detail.includes('attributes.live.analysis.control.error_p')&&!!d.shadowRoot.querySelector('time[datetime]');`,
   );
   assert.ok(checks.piDetail);
-  checks.liveSeparation = await run(`return !root.querySelector('.toolbar, .tracking, .timeline')&&!!root.querySelector('smartpi-control-diagram');`);
+  checks.liveSeparation = await run(`return !root.querySelector('.toolbar, .source, .tracking, .timeline')&&!!root.querySelector('smartpi-control-diagram');`);
   assert.ok(checks.liveSeparation);
+  checks.liveRoutes = await run(`
+    const d=root.querySelector('smartpi-control-diagram'),s=d.shadowRoot,base=d.diagnostic;
+    const use=async live=>{d.diagnostic={...base,live};await d.updateComplete;};
+    const live=structuredClone(base.live);
+    live.power.applied_percent=0;
+    live.power.current_cycle_percent=0;
+    live.power.next_cycle_percent=28;
+    live.analysis.control.forced_by_timing=true;
+    await use(live);
+    const timing=s.querySelector('.note').textContent.includes('Temporisation imposée') &&
+      [...s.querySelectorAll('.snapshot dd')].at(-1).textContent==='0 %';
+    s.querySelector('[data-block="applied"]').click();await d.updateComplete;
+    const cycle=s.querySelector('aside').textContent.includes('Candidat au cycle suivant') &&
+      s.querySelector('aside').textContent.includes('28 %');
+    await use({...live, calibration:{state:'HeatUp'}});
+    const calibration=s.querySelector('.route-badge').textContent.includes('Calibration') &&
+      s.querySelectorAll('.step').length===2 && !s.querySelector('[data-block="limits"]') &&
+      s.querySelector('aside h4').textContent.includes('Calibration');
+    await use({power:{applied_percent:0}});
+    const partial=!s.querySelector('.steps .arrow, svg path.flow') &&
+      s.querySelector('.note').textContent.includes('Motif indisponible') &&
+      [...s.querySelectorAll('.snapshot dd')].at(-1).textContent==='0 %';
+    d.diagnostic=base; await d.updateComplete;
+    s.querySelector('details').open=false;
+    return {timing,cycle,calibration,partial};
+  `);
+  assert.ok(Object.values(checks.liveRoutes).every(Boolean), JSON.stringify(checks.liveRoutes));
+  await run(`v.expert=false;await v.updateComplete;const d=root.querySelector('smartpi-control-diagram');await d.updateComplete;d.shadowRoot.querySelector('[data-block="limits"]').click();`);
   await run(`root.querySelector('smartpi-control-diagram').scrollIntoView();`);
   await settle();
   await send("Page.captureScreenshot", {
@@ -333,13 +361,29 @@ try {
   await send("Page.captureScreenshot", { format: "png", captureBeyondViewport: false }).then((r) =>
     writeFile(output + "/tracking-mobile.png", Buffer.from(r.data, "base64")),
   );
-  await run(`v.tab='regulation';await v.updateComplete;const d=root.querySelector('smartpi-control-diagram');await d.updateComplete;d.shadowRoot.querySelectorAll('.mobile button')[4].click();await d.updateComplete;d.shadowRoot.querySelector('aside').scrollIntoView({block:'center'});`);
+  await run(`v.tab='regulation';await v.updateComplete;const d=root.querySelector('smartpi-control-diagram');await d.updateComplete;d.shadowRoot.querySelector('[data-block="command"]').click();await d.updateComplete;d.scrollIntoView();`);
   await settle();
   checks.mobileDirectDetail = await run(`const d=root.querySelector('smartpi-control-diagram'),detail=d.shadowRoot.querySelector('aside').textContent;return detail.includes('État de l’hystérésis')&&!detail.includes('Sortie PI publiée')&&d.shadowRoot.querySelectorAll('.block.inactive').length===3&&document.documentElement.scrollWidth===390;`);
   assert.ok(checks.mobileDirectDetail);
   await send("Page.captureScreenshot", { format: "png", captureBeyondViewport: false }).then((r) =>
     writeFile(output + "/diagram-mobile.png", Buffer.from(r.data, "base64")),
   );
+  checks.supervisionShortcut = await run(`
+    const {session,preferSession,followNow,range,end}=v;
+    v.preferSession=true;await v.updateComplete;
+    const time=Date.parse(v.diagnostic.lastUpdated)/1000;
+    const sample={time,state:v.diagnostic.state,history:v.diagnostic.history,live:v.diagnostic.live};
+    v.session=[{...sample,observedAt:true}];await v.updateComplete;
+    root.querySelector('.open-supervision').click();await v.updateComplete;
+    const missing=!v.inspection && root.textContent.includes('publication du direct est introuvable');
+    v.tab='regulation';v.session=[sample];await v.updateComplete;
+    root.querySelector('.open-supervision').click();await v.updateComplete;
+    const selected=v.inspection?.time===time && v.inspection?.recorder===false &&
+      root.querySelector('#inspection-title').textContent.includes('Publication sélectionnée');
+    Object.assign(v,{session,preferSession,followNow,range,end});await v.updateComplete;
+    return {missing,selected};
+  `);
+  assert.ok(Object.values(checks.supervisionShortcut).every(Boolean), JSON.stringify(checks.supervisionShortcut));
   await run(`v.tab='evolution';window.historyMode='error';await v.load();`);
   await settle();
   checks.permission = await run(

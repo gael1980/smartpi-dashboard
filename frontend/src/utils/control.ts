@@ -64,16 +64,16 @@ const signals: Record<string, readonly Signal[]> = {
     ["Commande demandée", "power.command_percent", " %"],
     ["Commande appliquée", "power.applied_percent", " %"],
     ["Saturation déclarée", "control.saturation_state"],
-    ["Timing imposé", "analysis.control.forced_by_timing"],
+    ["Temporisation imposée", "analysis.control.forced_by_timing"],
     ["Correction anti-windup Δu", "analysis.control.aw_du", " (ratio)", 6],
     ["Source de protection de l’intégrale", "temperature.integral_guard_source"],
   ],
   applied: [
     ["Cycle engagé", "power.current_cycle_percent", " %"],
-    ["Cycle suivant", "power.next_cycle_percent", " %"],
+    ["Candidat au cycle suivant", "power.next_cycle_percent", " %"],
     ["Linéarisation de vanne", "power.valve_linearization_enabled"],
     ["Cycle engagé · espace linéaire", "power.linear_current_cycle_percent", " %"],
-    ["Cycle suivant · espace linéaire", "power.linear_next_cycle_percent", " %"],
+    ["Candidat au cycle suivant · espace linéaire", "power.linear_next_cycle_percent", " %"],
     ["Statut du retour de commande", "feedforward.fftrim.command_ownership.status"],
   ],
   model: [
@@ -97,15 +97,20 @@ export class ControlPresentation {
   private get live() {
     return this.diagnostic.available ? this.diagnostic.live : {};
   }
-  get bypass() {
-    if (!this.diagnostic.available) return false;
-    return (
-      inBootstrap(this.diagnostic) ||
+  get directMode() {
+    if (!this.diagnostic.available) return null;
+    if (
       ["CoolDown", "HeatUp", "CoolDownFinal"].includes(
         String(at(this.live, "calibration.state")),
       ) ||
       at(this.live, "control.phase") === "Calibration"
-    );
+    ) return "Calibration";
+    if (inBootstrap(this.diagnostic) || at(this.live, "control.phase") === "Hysteresis")
+      return "Hystérésis";
+    return null;
+  }
+  get bypass() {
+    return this.directMode !== null;
   }
   get route() {
     return this.bypass
@@ -113,6 +118,16 @@ export class ControlPresentation {
       : at(this.live, "control.mode") === "smartpi"
         ? "pi"
         : "unavailable";
+  }
+  get timingForced() {
+    const value = at(this.live, "analysis.control.forced_by_timing");
+    return typeof value === "boolean" ? value : null;
+  }
+  get saturation() {
+    const value = at(this.live, "control.saturation_state");
+    if (value === "SAT_HI") return "Saturation haute déclarée";
+    if (value === "SAT_LO") return "Saturation basse déclarée";
+    return null;
   }
   detail(block: ControlBlock, expert: boolean) {
     const id = block.id === "command" && this.bypass ? "direct" : block.id;
@@ -140,14 +155,14 @@ export class ControlPresentation {
       id,
       title,
       path,
-      value: display(at(v, path), unit, path === "model.a" ? 6 : 2),
+      value: display(num(at(v, path)), unit, path === "model.a" ? 6 : 2),
       explanation,
       reason: display(at(v, reasonPath)),
       reasonPath,
       status:
         status === "Contourné"
           ? status
-          : at(v, path) == null
+          : num(at(v, path)) === null
           ? "Indisponible"
           : (status ?? "Publié"),
     });
@@ -188,7 +203,7 @@ export class ControlPresentation {
       ),
       build(
         "command",
-        bypass ? "Hystérésis / calibration" : "Commande demandée",
+        this.directMode ?? "Commande demandée",
         bypass ? "power.applied_percent" : "power.command_percent",
         " %",
         bypass

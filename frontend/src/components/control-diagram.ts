@@ -1,17 +1,48 @@
-import { LitElement, html, svg, css } from "lit";
+import { LitElement, html, svg, css, nothing } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 import { type SmartPIDiagnostic } from "../adapter";
-import { ControlPresentation } from "../utils/control";
+import { ControlPresentation, type ControlBlock } from "../utils/control";
 @customElement("smartpi-control-diagram")
 export class ControlDiagram extends LitElement {
   @property({ attribute: false }) diagnostic?: SmartPIDiagnostic;
   @property({ type: Boolean }) expert = false;
-  @state() private selected = "pi";
+  @state() private selected?: { context: string; id: string };
   render() {
-    if (!this.diagnostic) return html``;
-    const view = new ControlPresentation(this.diagnostic),
-      blocks = view.blocks(),
-      chosen = blocks.find((b) => b.id === this.selected) ?? blocks[0];
+    if (!this.diagnostic) return nothing;
+    const view = new ControlPresentation(this.diagnostic);
+    const blocks = view.blocks();
+    const [setpoint, temperature, pi, ff, command, limits, applied, model] = blocks;
+    const route = view.route;
+    const directMode = view.directMode;
+    const timing = view.timingForced;
+    const saturation = view.saturation;
+    const context = `${this.diagnostic.entityId}/${directMode ?? route}`;
+    const select = (id: string) => { this.selected = { context, id }; };
+    const defaultBlock = route === "direct" ? command :
+      route === "pi" && (timing === true || saturation) ? limits : applied;
+    const chosen = (this.selected?.context === context
+      ? blocks.find((block) => block.id === this.selected?.id)
+      : undefined) ?? defaultBlock;
+    const routeLabel = directMode ? `Voie directe · ${directMode}` :
+      route === "pi" ? "Voie PI + anticipation" : "Chemin non vérifié";
+    const note = directMode
+      ? ["PI/FF contournés", `SmartPI déclare une voie directe en ${directMode.toLocaleLowerCase("fr-FR")}.`]
+      : route !== "pi"
+        ? ["Motif indisponible", "Cette publication ne permet pas de vérifier le chemin de commande."]
+        : timing === true
+          ? ["Temporisation imposée", "SmartPI signale une contrainte de durée minimale."]
+          : saturation
+            ? [saturation, "SmartPI publie l’état de saturation de la voie PI."]
+            : timing === false
+              ? ["Temporisation non imposée", "Le drapeau de temporisation imposée est inactif."]
+              : ["Motif indisponible", "Cette publication ne renseigne pas la temporisation."];
+    const warning = route === "pi" && (timing === true || saturation !== null);
+    const steps: readonly (readonly [ControlBlock, string, string | null, string])[] = route === "direct"
+      ? [[command, "Décision", directMode, "Voie directe"], [applied, "Sortie", "Appliquée", applied.value]]
+      : [[command, "Demande", route === "pi" ? "PI + anticipation" : "Demandée", command.value],
+          [limits, "Contraintes", "Limites et timing", route === "pi" ? limits.value : "Chemin non vérifié"],
+          [applied, "Sortie", "Appliquée", applied.value]];
+    const quickBlocks = route === "pi" ? [temperature, setpoint, pi, ff, model] : [temperature, setpoint, model];
     const updated = this.diagnostic.lastUpdated;
     const time = updated ? new Date(updated) : null;
     const timestamp = this.diagnostic.available && time && Number.isFinite(time.valueOf())
@@ -32,18 +63,55 @@ export class ControlDiagram extends LitElement {
           <span class="eyebrow">COMPRENDRE LA COMMANDE</span>
           <h3>Le régulateur, en direct</h3>
         </div>
-        <span class="badge"
-          >${view.bypass
-            ? "Chemin direct · PI/FF contournés"
-            : view.route === "pi"
-              ? "Voie PI + feedforward"
-              : "Chemin de commande non vérifié"}</span
-        >
+        <span class="badge route-badge">${routeLabel}</span>
       </div>
-      <p class="muted">
-        ${timestamp}. Les flèches pleines montrent le chemin logique déclaré.
-        Les pointillés représentent le retour de la pièce par la mesure.
-      </p>
+      <p class="muted stamp">${timestamp}</p>
+      <dl class="snapshot">
+        <div><dt>Température intérieure</dt><dd>${temperature.value}</dd><small>Mesure publiée</small></div>
+        <div><dt>Consigne filtrée</dt><dd>${setpoint.value}</dd><small>${view.bypass ? "Voie P contournée" : "Voie proportionnelle"}</small></div>
+        <div><dt>Commande demandée</dt><dd>${view.bypass ? "—" : command.value}</dd>
+          <small>${view.bypass ? "Voie PI contournée" : "Demande publiée"}</small></div>
+        <div><dt>Commande appliquée</dt><dd>${applied.value}</dd><small>Signal de commande</small></div>
+      </dl>
+      <div class="work">
+      <section class="route" aria-labelledby="route-title">
+        <h4 id="route-title">Chemin de commande</h4>
+        <div class="note ${warning ? "warning" : ""}">
+          <strong>${note[0]}</strong><p>${note[1]}</p>
+        </div>
+        <ol class="steps">
+          ${steps.map(([block, label, title, value], index) => html`<li>
+            ${index > 0 && route !== "unavailable" ? html`<span class="arrow" aria-hidden="true">→</span>` : nothing}
+            <button type="button" class="step" data-block=${block.id} aria-pressed=${block.id === chosen.id}
+              aria-controls="signal-inspector" @click=${() => select(block.id)}>
+              <small>${label}</small><strong>${title}</strong><span>${value}</span>
+            </button></li>`)}
+        </ol>
+        <div class="quick-blocks" role="group" aria-label="Signaux associés">
+          ${quickBlocks.map((block) => html`<button type="button" aria-pressed=${block.id === chosen.id}
+            aria-controls="signal-inspector" @click=${() => select(block.id)}>${block.id === "ff" ? "Anticipation" : block.title}</button>`)}
+        </div>
+      </section>
+      <aside id="signal-inspector" aria-labelledby="signal-title">
+        <span class="eyebrow">INSPECTION DU SIGNAL</span>
+        <h4 id="signal-title" aria-live="polite">${chosen.title} <span class="badge">${chosen.status}</span></h4>
+        <p>${chosen.explanation}</p>
+        <dl>
+          <div><dt>Valeur du bloc</dt><dd>${chosen.value}</dd>
+            ${this.expert ? html`<code>attributes.live.${chosen.path}</code>` : null}</div>
+          <div><dt>Motif ou contexte publié</dt><dd>${chosen.reason}</dd>
+            ${this.expert ? html`<code>attributes.live.${chosen.reasonPath}</code>` : null}</div>
+          ${view.detail(chosen, this.expert).map((row) => html`<div>
+            <dt>${row.label}</dt><dd>${row.value}</dd>
+            ${this.expert ? html`<code>attributes.live.${row.path}</code>${row.reliability ? html`<code>Fiabilité · ${row.reliability}</code>` : null}` : null}
+          </div>`)}
+        </dl>
+        ${chosen.status === "Contourné" ? html`<p class="muted">Ces valeurs décrivent un bloc hors du chemin actif.</p>` : nothing}
+      </aside>
+      </div>
+      <details class="full">
+        <summary>Schéma complet de la boucle</summary>
+        <p class="muted">Les flèches pleines montrent le chemin déclaré. Les pointillés représentent le retour de la mesure.</p>
       <div class="diagram">
         <svg
           viewBox="0 0 880 415"
@@ -66,23 +134,23 @@ export class ControlDiagram extends LitElement {
           ${view.route === "pi"
             ? svg`<path class="flow" d="M205 65 H235"/><path class="flow" d="M205 195 H220 V95 H235"/><path class="flow" d="M420 65 H435 V115 H450"/><path class="flow" d="M420 195 H435 V145 H450"/>`
             : view.bypass
-              ? svg`<path class="flow bypass" d="M205 65 H220 V10 H440 V100 H450"/><path class="flow bypass" d="M205 195 H220 V132 H450"/><path class="flow bypass" d="M635 125 H647 V310 H660"/>`
+              ? svg`<path class="flow bypass" d="M635 125 H647 V310 H660"/>`
               : null}
           ${view.route === "pi"
             ? svg`<path class="flow" d="M635 125 H660"/><path class="flow" d="M752 170 V265"/>`
             : null}
-          <path class="flow feedback" d="M660 315 H420" />
-          <path class="flow feedback" d="M235 345 H110 V245" />
+          ${route !== "unavailable" ? svg`<path class="flow feedback" d="M660 315 H420" />
+            <path class="flow feedback" d="M235 345 H110 V245" />` : nothing}
           ${blocks.map(
             (
               b,
               i,
-            ) => svg`<g role="button" tabindex="0" aria-pressed=${b.id === chosen.id} aria-label=${`${b.title} : ${b.value}. ${b.status}`} class=${"block " + (b.id === chosen.id ? "selected" : "") + (b.status === "Contourné" ? " inactive" : "")} transform=${`translate(${positions[i][0]},${positions[i][1]})`} @click=${() => (this.selected = b.id)} @keydown=${(
+            ) => svg`<g role="button" tabindex="0" aria-pressed=${b.id === chosen.id} aria-label=${`${b.title} : ${b.value}. ${b.status}`} class=${"block " + (b.id === chosen.id ? "selected" : "") + (b.status === "Contourné" ? " inactive" : "")} transform=${`translate(${positions[i][0]},${positions[i][1]})`} @click=${() => select(b.id)} @keydown=${(
               e: KeyboardEvent,
             ) => {
               if (e.key === "Enter" || e.key === " ") {
                 e.preventDefault();
-                this.selected = b.id;
+                select(b.id);
               }
             }}>
           <title>${b.explanation}</title><rect width="185" height="90" rx="10"/><text x="13" y="23" class="title">${b.title}</text><text x="13" y="50" class="value">${b.value}</text><text x="13" y="73" class="status">${b.status}</text>
@@ -94,28 +162,15 @@ export class ControlDiagram extends LitElement {
         ${blocks.map(
           (b) =>
             html`<button
+              type="button"
               aria-pressed=${b.id === chosen.id}
-              @click=${() => (this.selected = b.id)}
+              @click=${() => select(b.id)}
             >
               ${b.title}<strong>${b.value}</strong><small>${b.status}</small>
             </button>`,
         )}
       </div>
-      <aside aria-live="polite">
-        <h4>${chosen.title} <span class="badge">${chosen.status}</span></h4>
-        <p><b>Principe.</b> ${chosen.explanation}</p>
-        <dl>
-          <div><dt>Valeur du bloc</dt><dd>${chosen.value}</dd>
-            ${this.expert ? html`<code>attributes.live.${chosen.path}</code>` : null}</div>
-          <div><dt>Motif ou contexte publié</dt><dd>${chosen.reason}</dd>
-            ${this.expert ? html`<code>attributes.live.${chosen.reasonPath}</code>` : null}</div>
-          ${view.detail(chosen, this.expert).map((row) => html`<div>
-            <dt>${row.label}</dt><dd>${row.value}</dd>
-            ${this.expert ? html`<code>attributes.live.${row.path}</code>${row.reliability ? html`<code>Fiabilité : ${row.reliability}</code>` : null}` : null}
-          </div>`)}
-        </dl>
-        ${chosen.status === "Contourné" ? html`<p class="muted">Ce bloc est hors du chemin actif. Ses valeurs publiées ne décrivent pas la commande directe.</p>` : null}
-      </aside>`;
+      </details>`;
   }
   static styles = css`
     :host {
@@ -134,6 +189,7 @@ export class ControlDiagram extends LitElement {
     }
     .intro {
       display: flex;
+      flex-wrap: wrap;
       justify-content: space-between;
       align-items: center;
       gap: 12px;
@@ -144,6 +200,7 @@ export class ControlDiagram extends LitElement {
       color: var(--secondary-text-color);
     }
     .badge {
+      display: inline-block;
       font-size: 11px;
       border: 1px solid var(--divider-color);
       padding: 5px 9px;
@@ -152,6 +209,57 @@ export class ControlDiagram extends LitElement {
     .muted {
       color: var(--secondary-text-color);
     }
+    .route-badge {
+      font-weight: 650;
+      background: var(--secondary-background-color);
+    }
+    .stamp { margin: 6px 0 16px; }
+    .snapshot {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 0;
+      border-block: 1px solid var(--divider-color);
+      background: var(--secondary-background-color);
+      margin: 0;
+    }
+    .snapshot > div { padding: 12px 14px; border: 0; }
+    .snapshot > div + div { border-left: 1px solid var(--divider-color); }
+    .snapshot dd {
+      font-size: clamp(16px, 2vw, 24px);
+      font-variant-numeric: tabular-nums;
+    }
+    .snapshot small, .step small, .step > span { color: var(--secondary-text-color); }
+    .work { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); }
+    .route, aside { min-width: 0; padding: 16px; }
+    .note {
+      border-inline-start: 3px solid var(--primary-color);
+      background: var(--secondary-background-color);
+      padding: 8px 12px;
+      margin: 12px 0;
+    }
+    .note.warning { border-inline-start-color: var(--warning-color, #ce8d2c); }
+    .note strong, .note p { margin: 0; }
+    .steps {
+      display: flex;
+      gap: 6px;
+      list-style: none;
+      padding: 0;
+      margin: 12px 0;
+    }
+    .steps li {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex: 1 1 0;
+      min-width: 0;
+    }
+    .arrow { color: var(--primary-text-color); }
+    .step { flex: 1; align-self: stretch; min-width: 0; overflow-wrap: anywhere; }
+    .step small { margin-top: 0; }
+    .step > span { display: block; margin-top: 3px; font-size: 12px; }
+    .quick-blocks { display: flex; flex-wrap: wrap; gap: 6px; }
+    .quick-blocks button { min-height: 44px; padding: 7px 10px; font-size: 12px; }
+    .full { border-top: 1px solid var(--divider-color); }
+    summary { cursor: pointer; min-height: 44px; box-sizing: border-box; padding: 12px 0; }
     svg {
       width: 100%;
       display: block;
@@ -206,8 +314,7 @@ export class ControlDiagram extends LitElement {
     }
     aside {
       background: var(--secondary-background-color);
-      border-left: 3px solid var(--primary-color);
-      padding: 16px;
+      border-left: 1px solid var(--divider-color);
       min-height: 120px;
     }
     code {
@@ -240,9 +347,11 @@ export class ControlDiagram extends LitElement {
       border-radius: 8px;
       text-align: left;
       min-height: 80px;
+      cursor: pointer;
     }
     button[aria-pressed="true"] {
       border-color: var(--primary-color);
+      box-shadow: inset 0 0 0 1px var(--primary-color);
     }
     strong,
     small {
@@ -251,6 +360,11 @@ export class ControlDiagram extends LitElement {
     }
     :focus-visible {
       outline: 3px solid var(--primary-color);
+      outline-offset: 2px;
+    }
+    @media (max-width: 920px) {
+      .work { grid-template-columns: 1fr; }
+      aside { border-left: 0; border-top: 1px solid var(--divider-color); }
     }
     @media (max-width: 600px) {
       .diagram {
@@ -264,8 +378,13 @@ export class ControlDiagram extends LitElement {
       }
       .intro {
         align-items: flex-start;
-        flex-direction: column;
       }
+      .snapshot { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .snapshot > div:nth-child(3) { border-left: 0; }
+      .snapshot > div:nth-child(n + 3) { border-top: 1px solid var(--divider-color); }
+      .route, aside { padding: 14px 0; }
+      aside { padding-inline: 12px; }
+      .step { padding: 7px 5px; font-size: 12px; }
     }
   `;
 }
