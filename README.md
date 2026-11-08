@@ -31,9 +31,19 @@ Les diagnostics techniques de la version 0.1 restent accessibles.
 Voir [VISUAL_DIAGNOSTICS.md](VISUAL_DIAGNOSTICS.md) pour les sources, la fidélité
 au code SmartPI, l'architecture et les limites scientifiques.
 
-## Installation pour un dépôt privé
+## Installation
 
-HACS nécessite des dépôts publics ; tant que le dépôt est privé, compiler le frontend puis copier le composant manuellement :
+Avec Home Assistant 2026.11 ou une version ultérieure, ajouter ce dépôt comme
+dépôt personnalisé de type **Intégration** dans **Paramètres → Marketplace**,
+puis le télécharger. Cette méthode nécessite que le dépôt soit public et ne
+signifie pas qu'il est référencé dans le catalogue par défaut.
+
+Après le téléchargement, ajouter **SmartPI Dashboard** dans **Paramètres →
+Appareils et services → Ajouter une intégration**, puis ouvrir le panneau dans
+la barre latérale (administrateurs seulement). Un redémarrage est nécessaire
+après une mise à jour d'une intégration déjà chargée.
+
+Installation manuelle :
 
 1. Dans `frontend`, exécuter `npm install && npm run build`.
 2. Copier `custom_components/smartpi_dashboard/` (incluant le bundle généré dans `frontend/`) vers le dossier `config/custom_components/smartpi_dashboard/` de Home Assistant.
@@ -58,7 +68,7 @@ Sources de référence :
 - https://github.com/gael1980/smartpi-dash
 - https://github.com/Liquidmasl/vtherm_dashboard
 - https://developers.home-assistant.io/docs/frontend/custom-ui/
-- https://hacs.dev/docs/publish/start/
+- https://contributors.home-assistant.io/marketplace/guides/integrations/
 
 ## Validation avant installation
 
@@ -83,3 +93,5 @@ les interactions avec Chrome isolé, sans connexion au HA principal.
 
 Les notices des bibliothèques embarquées sont livrées dans
 `custom_components/smartpi_dashboard/frontend/THIRD_PARTY_NOTICES.md`.
+Le code du projet est distribué sous [licence MIT](LICENSE) ; les licences des
+bibliothèques embarquées restent applicables.
