@@ -2,6 +2,22 @@
 
 Panneau scientifique **en lecture seule** pour comprendre SmartPI dans Home Assistant.
 
+## Aperçu
+
+Ces captures utilisent uniquement des données de démonstration synthétiques.
+
+**Schéma complet de la boucle** : visualisez le chemin de commande et le retour de mesure.
+
+![Schéma complet de la boucle de régulation](docs/images/regulation-boucle.png)
+
+**Inspection d’un bloc** : sélectionnez le régulateur PI pour examiner les signaux publiés.
+
+![Inspection du régulateur PI dans le schéma](docs/images/regulateur-pi.png)
+
+**Supervision** : consultez le synoptique et les tendances historiques.
+
+![Vue de supervision et graphique de température](docs/images/supervision.png)
+
 ## Principes
 - Aucun changement de consigne, service, calibration ni écriture dans Home Assistant.
 - Découverte automatique des capteurs SmartPI Diagnostics (schéma v2).
