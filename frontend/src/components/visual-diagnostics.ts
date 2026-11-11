@@ -8,7 +8,7 @@ import {
   type SmartPIDiagnostic,
 } from "../adapter";
 import { readHistory, type HistoryConnection } from "../services/history";
-import { usable, observedEvents, observedTracking, timestamp, valueAt, type Sample } from "../utils/timeseries";
+import { usable, learningMarks, observedEvents, observedTracking, timestamp, valueAt, type LearningMark, type Sample } from "../utils/timeseries";
 import { ControlPresentation } from "../utils/control";
 import "./time-chart";
 import "./control-diagram";
@@ -29,6 +29,8 @@ const temp: Curve[] = [
     step: true,
   },
 ];
+const learningTemp = temp.map((curve) => curve.step ? { ...curve, dash: [6, 4] } : curve);
+const learningKinds = ["A", "B", "Chauffe", "Refroidissement"] as const;
 const power: Curve[] = [
   {
     label: "Appliquée",
@@ -71,6 +73,7 @@ export class VisualDiagnostics extends LitElement {
   @property({ attribute: false }) diagnostic?: SmartPIDiagnostic;
   @property({ attribute: false }) session: Sample[] = [];
   @state() private tab = "evolution";
+  @state() private hiddenLearning: LearningMark["kind"][] = [];
   @state() private expert = false;
   @state() private hours = 24;
   @state() private end = Date.now() / 1000;
@@ -371,6 +374,10 @@ export class VisualDiagnostics extends LitElement {
     const fromRecorder = this.usingRecorder,
       all = fromRecorder ? this.recorder : this.session;
     const { samples, events, tracking } = this.windowData(all);
+    const learning = this.tab === "learning";
+    const marks = learning ? learningMarks(all).filter((mark) =>
+      mark.time >= this.range[0] && mark.time <= this.range[1]
+      && !this.hiddenLearning.includes(mark.kind)) : [];
     const liveView = this.tab === "regulation";
     const supervision = this.tab === "evolution";
     const point = this.inspection;
@@ -381,6 +388,8 @@ export class VisualDiagnostics extends LitElement {
       html`<section class=${percent ? "chart command-chart" : "chart"}>
         <smartpi-time-chart
           .heading=${heading}
+          .marks=${learning && curves === learningTemp ? marks : []}
+          .thermalPhases=${learning && curves === learningTemp}
           .samples=${samples}
           .curves=${curves}
           .range=${this.range}
@@ -418,6 +427,7 @@ export class VisualDiagnostics extends LitElement {
           ["evolution", "Supervision"],
           ["regulation", "Régulation en direct"],
           ["model", "Santé du modèle"],
+          ["learning", "Apprentissage"],
         ].map(
           ([id, label]) =>
             html`<button
@@ -557,6 +567,64 @@ export class VisualDiagnostics extends LitElement {
                 <summary>Chaîne de commande détaillée</summary>
                 <smartpi-command-chain .diagnostic=${d}></smartpi-command-chain>
               </details>`
+          : learning ? html`
+              <section class="pane">
+                <div class="periods" role="group" aria-label="Repères d’apprentissage">
+                  ${learningKinds.map((kind, i) => html`
+                    <button type="button" aria-pressed=${!this.hiddenLearning.includes(kind)}
+                      @click=${() => {
+                        this.hiddenLearning = this.hiddenLearning.includes(kind)
+                          ? this.hiddenLearning.filter((item) => item !== kind)
+                          : [...this.hiddenLearning, kind];
+                      }}>${["●", "◆", "↑", "↓"][i]} ${kind}</button>`)}
+                </div>
+                <p class="foot">Les repères sont datés à la publication ou à l’observation.
+                  Les lettres A et B indiquent une hausse du compteur de mises à jour
+                  acceptées ou de mesures collectées entre deux publications. Le détail distingue les deux. Deux lettres à la même date peuvent
+                  regrouper des apprentissages survenus à des instants différents.
+                  ${samples.some((sample) => at(sample.live, "learning") !== undefined)
+                    ? "Consultez le détail pour connaître l’intervalle observé."
+                    : "Cette source ne contient pas les compteurs historiques. Les repères A/B sont indisponibles ici. La session conserve les diagnostics reçus pendant l’ouverture du panneau."}
+                  Zoomez pour séparer les repères rapprochés.</p>
+                <p class="foot">Fond orange · température en hausse. Fond bleu · température
+                  en baisse. Fond neutre · valeur stable ou absente. Ces intervalles
+                  comparent les mesures successives.</p>
+                ${fromRecorder && !samples.some((sample) => at(sample.live, "learning") !== undefined)
+                  ? html`<p class="notice">Le Recorder sélectionné contient les courbes, mais pas les
+                    compteurs d’apprentissage. Les événements passés ne peuvent pas être datés.
+                    <button type="button" @click=${() => { this.preferSession = true; this.inspection = undefined; }}>
+                      Observer les prochains apprentissages en session</button></p>` : nothing}
+                ${chart("Température et consigne filtrée", learningTemp)}
+                ${chart("Activité du régulateur · commande appliquée", [power[0]], true)}
+                <p class="foot">En mode chauffage, une commande positive correspond à une
+                  chauffe commandée, zéro à un arrêt de commande. La température peut
+                  encore monter après l’arrêt. La commande est exprimée en pourcentage.</p>
+                ${samples.some((sample) => at(sample.live, "learning.emea_samples_a") !== undefined || at(sample.live, "learning.emea_samples_b") !== undefined)
+                  ? chart("Collecte du modèle · nombre de mesures conservées", [
+                    {label:"Mesures A", path:"live.learning.emea_samples_a", color:"#17638d", unit:"mesures", step:true},
+                    {label:"Mesures B", path:"live.learning.emea_samples_b", color:"#6f448a", unit:"mesures", step:true},
+                  ]) : nothing}
+                <p>Temps morts actuels · chauffe
+                  ${display(reliableValue(d.live, "model.deadtime_heat_s", "model.deadtime_heat_reliable"), " s")}
+                  · refroidissement
+                  ${display(reliableValue(d.live, "model.deadtime_cool_s", "model.deadtime_cool_reliable"), " s")}</p>
+                <p class="foot">↑ Chauffe et ↓ Refroidissement repèrent des publications.
+                  Les durées sont des médianes. Les bornes des épisodes ne sont pas publiées.
+                  ${samples.some((sample) => at(sample.live, "analysis.deadtime") || at(sample.live, "model.deadtime_heat_reliable") !== undefined || at(sample.live, "model.deadtime_cool_reliable") !== undefined)
+                    ? "La couverture dépend des données présentes dans chaque publication."
+                    : "Cette fenêtre ne contient pas de diagnostics historiques de temps mort."}</p>
+                <details>
+                  <summary>Détail des repères (${marks.length})</summary>
+                  ${marks.length ? html`<ol>
+                    ${marks.slice(-60).reverse().map((mark) => html`<li>
+                      <time datetime=${new Date(mark.time * 1000).toISOString()}>${new Date(mark.time * 1000).toLocaleString()}</time>
+                      ${mark.observedAt ? " (observation)" : ""} · ${mark.label}
+                    </li>`)}
+                  </ol>
+                  ${marks.length > 60 ? html`<p class="foot">60 derniers repères. Zoomez pour consulter une plage plus courte.</p>` : nothing}`
+                  : html`<p>Aucun repère observable avec les filtres et les données de cette fenêtre.</p>`}
+                </details>
+              </section>`
           : html`
               <div class="model-heading">
                 <h3>Modèle appris</h3>
@@ -681,7 +749,7 @@ export class VisualDiagnostics extends LitElement {
                 </p>
               </section>
             `}
-      ${liveView ? nothing : html`<section class="timeline">
+      ${liveView || learning ? nothing : html`<section class="timeline">
         <h3 id="journal-title" tabindex="-1">
           Journal des publications
           <span>${events.length} variations observées</span>

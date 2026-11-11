@@ -2,13 +2,14 @@ import { LitElement, html, css, unsafeCSS } from "lit";
 import { customElement, property } from "lit/decorators.js";
 import uPlot from "uplot";
 import plotCSS from "uplot/dist/uPlot.min.css";
-import { valueAt, type Sample } from "../utils/timeseries";
+import { valueAt, type LearningMark, type Sample } from "../utils/timeseries";
 export interface Curve {
   label: string;
   path: string;
   color: string;
   unit: string;
   step?: boolean;
+  dash?: number[];
 }
 @customElement("smartpi-time-chart")
 export class TimeChart extends LitElement {
@@ -20,6 +21,8 @@ export class TimeChart extends LitElement {
   @property({ type: Boolean }) percent = false;
   @property({ type: Boolean }) inspectable = false;
   @property({ attribute: false }) selectedTime: number | null = null;
+  @property({ attribute: false }) marks: LearningMark[] = [];
+  @property({ type: Boolean }) thermalPhases = false;
   private lastSamples?: Sample[];
   private lastSignature = "";
   private plot?: uPlot;
@@ -51,10 +54,11 @@ export class TimeChart extends LitElement {
       this.heading,
       this.syncKey,
       this.percent,
+      this.thermalPhases,
       this.range,
     ]);
     if (this.lastSamples === this.samples && this.lastSignature === signature) {
-      if (changed.has("selectedTime")) this.plot?.redraw(false, false);
+      if (changed.has("selectedTime") || changed.has("marks")) this.plot?.redraw(false, false);
       return;
     }
     this.lastSamples = this.samples;
@@ -79,6 +83,83 @@ export class TimeChart extends LitElement {
     const index = this.curves.findIndex((curve) => curve.path === path);
     if (index >= 0 && this.hiddenCurves.has(this.curves[index].label))
       this.toggleSeries(index);
+  }
+  private drawThermalPhases(u: uPlot) {
+    if (!this.thermalPhases) return;
+    const { left, top, width, height } = u.bbox;
+    const ctx = u.ctx;
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(left, top, width, height);
+    ctx.clip();
+    ctx.globalAlpha = 1;
+    let start = 0;
+    let end = 0;
+    let direction = 0;
+    const flush = () => {
+      if (!direction) return;
+      const x = u.valToPos(start, "x", true);
+      const span = u.valToPos(end, "x", true) - x;
+      ctx.fillStyle = direction > 0 ? "rgba(216,137,46,.14)" : "rgba(38,137,202,.14)";
+      ctx.fillRect(x, top, span, height);
+      ctx.fillStyle = direction > 0 ? "#d8892e" : "#2689ca";
+      ctx.fillRect(x, top + height - 6 * devicePixelRatio, span, 6 * devicePixelRatio);
+    };
+    for (let i = 1; i < this.samples.length; i++) {
+      const previous = this.samples[i - 1], current = this.samples[i];
+      const before = valueAt(previous, "temperature.indoor");
+      const after = valueAt(current, "temperature.indoor");
+      const next = before === null || after === null ? 0 : Math.sign(after - before);
+      if (next !== direction) {
+        flush();
+        start = previous.time;
+        direction = next;
+      }
+      end = current.time;
+    }
+    flush();
+    ctx.restore();
+  }
+  private drawMarks(u: uPlot, text: string) {
+    if (!this.marks.length) return;
+    const { left, top, width, height } = u.bbox;
+    const ctx = u.ctx;
+    const size = 8 * devicePixelRatio;
+    ctx.save();
+    ctx.font = `bold ${size}px sans-serif`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    const lastX = new Map<LearningMark["kind"], number>();
+    for (const mark of this.marks) {
+      const x = u.valToPos(mark.time, "x", true);
+      if (x < left || x > left + width || x - (lastX.get(mark.kind) ?? -Infinity) < size * 3) continue;
+      lastX.set(mark.kind, x);
+      const model = mark.kind === "A" || mark.kind === "B";
+      const upper = mark.kind === "A" || mark.kind === "Chauffe";
+      const y = model
+        ? mark.temperature === null || this.hiddenCurves.has("Intérieure mesurée")
+          ? top + size * (upper ? 1 : 3)
+          : Math.max(top + size * 2, Math.min(top + height - size * 6,
+              u.valToPos(mark.temperature, "y", true))) + size * (upper ? -1.1 : 1.1)
+        : top + height - size * (upper ? 3 : 1);
+      ctx.fillStyle = upper ? "#17638d" : "#6f448a";
+      ctx.strokeStyle = text;
+      ctx.beginPath();
+      if (mark.kind === "B") {
+        ctx.moveTo(x, y - size);
+        ctx.lineTo(x + size, y);
+        ctx.lineTo(x, y + size);
+        ctx.lineTo(x - size, y);
+        ctx.closePath();
+      } else {
+        ctx.arc(x, y, size * .8, 0, 2 * Math.PI);
+      }
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = "#fff";
+      ctx.fillText(mark.kind === "Chauffe" ? "↑" : mark.kind === "Refroidissement" ? "↓" : mark.kind, x, y);
+    }
+    ctx.restore();
   }
   private draw() {
     if (!this.isConnected) return;
@@ -163,6 +244,7 @@ export class TimeChart extends LitElement {
             label: c.label,
             stroke: c.color,
             width: 2,
+            dash: c.dash,
             spanGaps: false,
             show: !this.hiddenCurves.has(c.label),
             paths: c.step ? uPlot.paths.stepped!({ align: 1 }) : undefined,
@@ -175,6 +257,8 @@ export class TimeChart extends LitElement {
         ],
         hooks: {
           draw: [(u) => {
+            this.drawThermalPhases(u);
+            this.drawMarks(u, text);
             if (this.selectedTime === null) return;
             const { left, top, width, height } = u.bbox;
             const x = u.valToPos(this.selectedTime, "x", true);

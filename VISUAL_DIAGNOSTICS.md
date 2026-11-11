@@ -305,3 +305,31 @@ actif. Les tests déterministes utilisent UTC/en-US dans leur navigateur isolé.
 Les résultats de la nouvelle CI sont suivis dans la PR, sans effacer ce premier échec.
 Les skills utiles sont déjà installées dans l'environnement Codex/ECC et sont
 référencées dans AGENTS.md ; aucune copie externe supplémentaire n'est ajoutée.
+
+## Apprentissage
+
+L’onglet réutilise la fenêtre et la source actives. Il superpose les repères A/B
+à la température intérieure et à la consigne filtrée. Une hausse des compteurs
+`live.learning.accepted_updates_a/b` indique des mises à jour acceptées entre
+deux publications. Le Recorder standard conserve les valeurs A/B sans les compteurs. Les lettres
+sont donc absentes lorsque les compteurs manquent. Les repères portent l’heure de publication
+ou d’observation, avec un détail textuel sous le graphe.
+
+Les lignes ↑ et ↓ montrent les changements d’estimation fiable ou les
+transitions observées vers `detected` dans `live.analysis.deadtime`. Les valeurs
+`live.model.deadtime_{heat,cool}_s` sont des médianes, filtrées par les drapeaux
+de la même publication. Les bornes physiques des épisodes ne sont pas
+publiées. Les temps morts actuels sont indiqués séparément de l’historique.
+
+La 0.2.6 réserve les lettres aux hausses de compteurs. Leur détail donne
+l’intervalle entre publications. Les aplats orange et bleu indiquent
+respectivement une hausse et une baisse de température entre deux mesures
+disponibles. Le graphe de commande appliquée partage la même plage temporelle.
+
+La 0.2.7 affiche en permanence les deux compteurs de mesures conservées
+`learning.emea_samples_a/b`, les paliers initiaux publiés et l’objectif
+`learning.history_target`. Les barres décrivent la collecte, avec la confiance
+du modèle affichée séparément. Les temps morts, dernières issues et motifs sont
+ceux de la publication courante. Pendant le bootstrap, les hausses de mesures
+collectées peuvent produire des repères A/B distinctement libellés. Si les
+compteurs historiques existent, un graphe de collecte partage la plage active.

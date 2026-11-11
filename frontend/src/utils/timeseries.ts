@@ -218,3 +218,57 @@ export class SessionHistory {
     this.revisions.clear();
   }
 }
+
+export interface LearningMark {
+  time: number;
+  kind: "A" | "B" | "Chauffe" | "Refroidissement";
+  temperature: number | null;
+  label: string;
+  observedAt?: boolean;
+}
+
+export function learningMarks(samples: readonly Sample[]): LearningMark[] {
+  const marks: LearningMark[] = [];
+  const count = (sample: Sample, key: string) => {
+    const value = num(at(sample.live, `learning.accepted_updates_${key}`));
+    return value !== null && Number.isSafeInteger(value) && value >= 0 ? value : null;
+  };
+  for (let i = 1; i < samples.length; i++) {
+    const [previous, current] = [samples[i - 1], samples[i]];
+    if ([previous, current].some((s) => ["unknown", "unavailable", "inactive"].includes(s.state))) continue;
+    const point = {
+      time: current.time,
+      observedAt: current.observedAt,
+      temperature: valueAt(current, "temperature.indoor"),
+    };
+    for (const kind of ["A", "B"] as const) {
+      const key = kind.toLowerCase();
+      const before = count(previous, key), after = count(current, key);
+      const value = valueAt(current, `model.${key}`);
+      const unit = kind === "A" ? "°C/min/u" : "min⁻¹";
+      const published = value === null ? "valeur indisponible" : `${value} ${unit}`;
+      if (before !== null && after !== null && after > before)
+        marks.push({ ...point, kind, label: `${kind} · +${after - before} accepté(s) entre ${new Date(previous.time * 1000).toLocaleString()} et cette publication · ${published}` });
+      const oldSamples = num(at(previous.live, `learning.emea_samples_${key}`));
+      const newSamples = num(at(current.live, `learning.emea_samples_${key}`));
+      if (!(before !== null && after !== null && after > before)
+          && oldSamples !== null && newSamples !== null && oldSamples >= 0 && newSamples > oldSamples)
+        marks.push({ ...point, kind, label: `${kind} · +${newSamples - oldSamples} mesure(s) collectée(s) entre ${new Date(previous.time * 1000).toLocaleString()} et cette publication · ${published}` });
+    }
+    for (const [direction, kind] of [["heat", "Chauffe"], ["cool", "Refroidissement"]] as const) {
+      const estimate = (sample: Sample) => num(reliableValue(
+        sample.live, `model.deadtime_${direction}_s`, `model.deadtime_${direction}_reliable`,
+      ));
+      const value = estimate(current);
+      const path = `analysis.deadtime.${direction}_last_outcome`;
+      const previousOutcome = at(previous.live, path);
+      const detected = typeof previousOutcome === "string" && previousOutcome !== "detected"
+        && at(current.live, path) === "detected";
+      if (detected || (value !== null && value >= 0 && value !== estimate(previous))) {
+        const duration = value !== null && value >= 0 ? `médiane ${value} s` : "médiane indisponible";
+        marks.push({ ...point, kind, label: `${kind} · ${detected ? "détection observée · " : ""}${duration}` });
+      }
+    }
+  }
+  return marks;
+}

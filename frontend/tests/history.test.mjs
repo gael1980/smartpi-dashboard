@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   decodeRows,
   observedEvents,
+  learningMarks,
   observedTracking,
   valueAt,
   SessionHistory,
@@ -306,4 +307,48 @@ test("live block details keep measured, published and guarded values distinct", 
   d.available = false;
   assert.equal(view.route, "unavailable");
   assert.equal(field("pi", "analysis.control.error_p"), "Indisponible");
+});
+
+test("learning distinguishes accepted updates, resets, and Recorder variations", () => {
+  const point = (time, a, count, state = "stable") => ({
+    ...row(time, state, { model: { a, b: 1 } }),
+    a: { schema_version: 2, history: { model: { a, b: 1 } },
+      live: count === undefined ? {} : { learning: { accepted_updates_a: count } } },
+  });
+  const marks = learningMarks(decodeRows([
+    point(1, 2, 0), point(2, 2, 3), point(3, 1, 0),
+    point(4, 2), point(5, 3), point(6, 5, undefined, "unavailable"), point(7, 6),
+  ]));
+  assert.deepEqual(marks.map(mark => mark.time), [2]);
+  assert.match(marks[0].label, /A · \+3 accepté/);
+  assert.match(marks[0].label, /entre .* et cette publication/);
+});
+
+test("learning preserves a reliable zero and separates it from the last detection", () => {
+  const point = (time, reliable, outcome) => ({
+    ...row(time),
+    a: { ...row(time).a, live: {
+      model: { deadtime_heat_s: 0, deadtime_heat_reliable: reliable },
+      analysis: { deadtime: { heat_last_outcome: outcome } },
+    } },
+  });
+  const marks = learningMarks(decodeRows([
+    point(1, false, "rejected"), point(2, false, "detected"),
+    point(3, true, "detected"), point(4, true, "detected"),
+  ]));
+  assert.deepEqual(marks.map(({ time, label }) => [time, label]), [
+    [2, "Chauffe · détection observée · médiane indisponible"], [3, "Chauffe · médiane 0 s"],
+  ]);
+});
+
+test("bootstrap sample collection has its own label without inventing an accepted update", () => {
+  const samples = [0, 1, 1].map((count, i) => ({
+    time: i + 1, state: "bootstrap_hysteresis",
+    history: { temperature: { indoor: 18 }, model: { a: 2 } },
+    live: { learning: { emea_samples_a: count, accepted_updates_a: 0 } },
+  }));
+  const marks = learningMarks(samples);
+  assert.equal(marks.length, 1);
+  assert.match(marks[0].label, /mesure\(s\) collectée/);
+  assert.doesNotMatch(marks[0].label, /accepté/);
 });

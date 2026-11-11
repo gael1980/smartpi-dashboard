@@ -146,7 +146,7 @@ export class SmartPIDashboardPanel extends LitElement {
     const v = d.live;
     const notes = explanations(d);
     const bootstrap = inBootstrap(d);
-    const percent = num(at(v,"learning.bootstrap_progress_percent"));
+
     const publication = timestamp(d.lastUpdated);
     return html`
       <section class="hero">
@@ -162,12 +162,59 @@ export class SmartPIDashboardPanel extends LitElement {
           ${this.metric("Commande appliquée",at(v,"power.applied_percent")," %",1)}
           ${this.metric("Température extérieure",at(v,"temperature.outdoor")," °C")}
         </div>
-        ${bootstrap ? html`<div class="learn">
-          <div class="flex spread"><span>Progression de l’apprentissage</span><strong>${display(percent," %",0)}</strong></div>
-          <div class="track"><div class="fill applied" style=${"width:"+(percent===null?0:Math.max(0,Math.min(100,percent)))+"%"}></div></div>
-          <div class="muted small">A : ${display(at(v,"learning.emea_samples_a"),"",0)} / ${display(at(v,"learning.bootstrap_target_a"),"",0)}
-            · B : ${display(at(v,"learning.emea_samples_b"),"",0)} / ${display(at(v,"learning.bootstrap_target_b"),"",0)}</div>
-        </div>` : nothing}
+        <section class="learn" aria-label="Avancement de l’apprentissage">
+          <div class="flex spread"><h3>Apprentissage du modèle</h3>
+            <strong>${display(({bootstrap:"Initialisation", learning:"Collecte du modèle", monitoring:"Surveillance", degraded:"Modèle à consolider"} as Record<string,string>)[String(at(v, "learning.stage"))] ?? at(v, "learning.stage"))}</strong></div>
+          <div class="columns">
+            ${(["a", "b"] as const).map((key) => {
+              const count = num(at(v, `learning.emea_samples_${key}`));
+              const initial = num(at(v, `learning.bootstrap_target_${key}`));
+              const target = num(at(v, "learning.history_target"));
+              const valid = count !== null && count >= 0 && target !== null && target > 0;
+              const percent = valid ? Math.min(100, 100 * count / target) : null;
+              return html`<div>
+                <div class="flex spread"><strong>${key.toUpperCase()} · ${key === "a" ? "chauffe" : "pertes thermiques"}</strong>
+                  <span>${display(percent, " %", 0)}</span></div>
+                <progress aria-label=${`Historique de ${key.toUpperCase()}`}
+                  max=${target ?? 1} value=${valid ? Math.min(count, target) : nothing}></progress>
+                <p class="muted small">${display(count, "", 0)} / ${display(target, "", 0)} mesures conservées
+                  · premier palier ${display(initial, "", 0)}
+                  ${count !== null && initial !== null ? (count >= initial ? "atteint" : "en cours") : ""}</p>
+                <p class="muted small">Mises à jour acceptées · ${display(at(v, `learning.accepted_updates_${key}`), "", 0)}</p>
+              </div>`;
+            })}
+          </div>
+          <p class="muted small">Les pourcentages décrivent le remplissage de l’historique.
+            Confiance publiée · ${display(at(v, "model.confidence"))}
+            · τ fiable · ${display(at(v, "model.tau_reliable"))}</p>
+          <div class="columns">
+            ${(["heat", "cool"] as const).map((direction) => {
+              const reliable = at(v, `model.deadtime_${direction}_reliable`);
+              return html`<div><strong>Temps mort · ${direction === "heat" ? "chauffe" : "refroidissement"}</strong>
+                <p>${reliable === true
+                  ? display(at(v, `model.deadtime_${direction}_s`), " s", 0)
+                  : reliable === false ? "En attente d’une mesure fiable" : "Indisponible"}</p>
+                <p class="muted small">Dernière issue · ${display(at(v, `analysis.deadtime.${direction}_last_outcome`))}</p></div>`;
+            })}
+          </div>
+          ${bootstrap ? html`<p><strong>Prochaine étape</strong> ·
+            ${String(at(v, "learning.bootstrap_status")).includes("waiting response lag")
+              ? "Les premières mesures sont collectées. SmartPI attend de résoudre le délai de réponse."
+              : at(v, "model.deadtime_heat_reliable") === false || at(v, "model.deadtime_cool_reliable") === false
+                ? "Acquérir les temps morts encore en attente pour débloquer les observations correspondantes."
+                : "Collecter les premières mesures A et B acceptables par SmartPI."}</p>` : nothing}
+          ${bootstrap ? html`<p><strong>Étape initiale</strong> · ${display(at(v, "learning.bootstrap_status"))}</p>` : nothing}
+          ${at(v, "learning.enabled") === false ? html`<p>Apprentissage désactivé selon SmartPI.</p>` : nothing}
+          <p>Détection en cours · ${display(at(v, "analysis.deadtime.state"))}
+            · attente écoulée ${display(at(v, "analysis.deadtime.waiting_elapsed_s"), " s", 0)}</p>
+          <p>Délai de réponse · ${display(at(v, "analysis.learning.response_lag.lag_s"), " s", 0)}
+            · épisodes ${display(at(v, "analysis.learning.response_lag.episodes"), "", 0)}</p>
+          <p class="muted small">Motif d’apprentissage · ${display(at(v, "learning.last_reason"))}
+            · motif du délai · ${display(at(v, "analysis.learning.response_lag.last_reason"))}</p>
+          <p class="muted small">Si les compteurs restent à zéro, les états et motifs ci-dessus
+            décrivent la dernière situation publiée. Une nouvelle mesure dépend d’une
+            observation exploitable acceptée par SmartPI.</p>
+        </section>
       </section>
       <smartpi-visual-diagnostics .hass=${this.hass} .diagnostic=${d} .session=${this.sessionHistory.get(d.entityId)}></smartpi-visual-diagnostics>
       <details class="surface technical"><summary>Diagnostics techniques complets</summary>
@@ -236,6 +283,7 @@ export class SmartPIDashboardPanel extends LitElement {
     .metric span{font-size:12px;color:var(--secondary-text-color)}.metric strong{font-size:21px;overflow-wrap:anywhere}
     .track{height:9px;background:var(--divider-color);border-radius:20px;overflow:hidden;margin-top:8px}
     .fill{height:100%;border-radius:20px}.applied{background:var(--primary-color)}.pi{background:#529ad8}.ff{background:#ab82c6}.cmd{background:#999}
+    progress{width:100%;height:16px;accent-color:var(--primary-color)}
     .learn{margin-top:20px;font-size:13px}.columns{display:grid;grid-template-columns:1fr 1fr;gap:15px;margin-top:16px}
     .surface{padding:20px}.surface h3{margin:0 0 13px;font-size:17px}
     .surface p,.surface li{font-size:14px;line-height:1.55}.surface ul{margin:0;padding-left:18px}.surface li{margin-bottom:8px}

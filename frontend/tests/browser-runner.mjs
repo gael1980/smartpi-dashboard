@@ -96,6 +96,13 @@ try {
   );
   assert.equal(checks.initial.reads, 4);
   assert.equal(checks.initial.writes, 0);
+  checks.learningProgress = await run(`
+    const meters = [...p.shadowRoot.querySelectorAll('.learn progress')];
+    return meters.length === 2 && meters.every(meter => meter.max === 31)
+      && meters[0].value === 9 && meters[1].value === 5
+      && p.shadowRoot.querySelector('.learn').textContent.includes('premier palier 5');
+  `);
+  assert.ok(checks.learningProgress);
   assert.equal(checks.initial.charts, 3);
   assert.ok(checks.initial.canvas);
   assert.ok(checks.initial.rows > 5700);
@@ -348,7 +355,7 @@ try {
     writeFile(output + "/mobile.png", Buffer.from(r.data, "base64")),
   );
   checks.mobileViews = {};
-  for (const tab of ["evolution", "regulation", "model"]) {
+  for (const tab of ["evolution", "regulation", "model", "learning"]) {
     await run(`v.tab='${tab}';`);
     await settle();
     checks.mobileViews[tab] = await evaluate(
@@ -356,6 +363,24 @@ try {
     );
     assert.equal(checks.mobileViews[tab], 390);
   }
+  checks.learning = await run(`
+    const chart = root.querySelector('smartpi-time-chart');
+    await chart.updateComplete;
+    const before = chart.marks;
+    const filter = root.querySelector('[aria-label="Repères d’apprentissage"] button');
+    filter.click();
+    await v.updateComplete;
+    const filtered = !before.some(mark => mark.kind === 'A' || mark.kind === 'B') && chart.marks.every(mark => mark.kind !== 'A') && chart.thermalPhases && root.querySelectorAll('smartpi-time-chart').length === 2;
+    filter.click();
+    await v.updateComplete;
+    chart.scrollIntoView({block:'center'});
+    return filtered && !!chart.shadowRoot.querySelector('canvas');
+  `);
+  assert.ok(checks.learning);
+  await settle();
+  await send("Page.captureScreenshot", { format: "png", captureBeyondViewport: false }).then((r) =>
+    writeFile(output + "/learning-mobile.png", Buffer.from(r.data, "base64")),
+  );
   await run(`v.tab='evolution';await v.updateComplete;root.querySelector('.tracking').scrollIntoView({block:'center'});`);
   await settle();
   await send("Page.captureScreenshot", { format: "png", captureBeyondViewport: false }).then((r) =>

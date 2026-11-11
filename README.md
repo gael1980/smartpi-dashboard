@@ -27,10 +27,11 @@ Ces captures utilisent uniquement des données de démonstration synthétiques.
 
 ## État du développement
 
-**Version 0.2.4** : panneau natif avec graphiques température/consigne, commandes,
+**Version 0.2.7** — panneau natif avec graphiques température/consigne, commandes,
 écart filtré et modèle A/B sur 1–48 h. Zoom, déplacement, curseurs synchronisés,
 légende interactive, tables accessibles, schéma logique cliquable et chaîne U.
-Les vues Supervision, Régulation en direct et Santé du modèle proposent un mode expert.
+Les vues Supervision, Régulation en direct, Santé du modèle et Apprentissage
+proposent un mode expert.
 La vue Supervision relie le synoptique, le journal et les tendances à un
 inspecteur de publications. Elle indique le nombre de couples valides et décrit l’écart à la
 consigne filtrée sur les publications de la fenêtre sélectionnée.
@@ -40,6 +41,35 @@ l’inspecteur. « Voir dans Supervision » recherche la même publication dans 
 source et la fenêtre affichées.
 Le schéma relie chaque bloc aux signaux et motifs publiés, dont les erreurs P et I,
 les gains, l’anti-windup et les contraintes de cycle.
+
+### Suivre l’apprentissage
+
+En haut de la pièce sélectionnée, deux barres suivent les mesures A et B
+conservées par SmartPI jusqu’à l’objectif publié, actuellement 31 par coefficient.
+Le premier palier de 5 mesures reste indiqué après le bootstrap. Le panneau
+affiche aussi l’étape, la confiance publiée du modèle, les temps morts fiables
+ou attendus, le délai de réponse et les derniers motifs d’apprentissage.
+
+Dans l’onglet **Apprentissage**, la température et la consigne filtrée partagent
+la plage temporelle avec la commande appliquée. Le fond orange indique une
+hausse de température entre deux mesures, le bleu une baisse. Les compteurs
+historiques disponibles alimentent également un graphe de collecte A/B.
+
+Les repères A/B distinguent les mesures collectées des mises à jour acceptées.
+Leur date correspond à la publication ou à l’observation, et leur détail précise
+l’intervalle entre publications. Deux repères à la même date peuvent couvrir
+des apprentissages survenus à des instants différents. Les repères chauffe et
+refroidissement montrent les détections observées ou les changements de médiane
+fiable publiés par SmartPI.
+
+Le Recorder standard conserve les courbes sans les compteurs ni les temps morts.
+Lorsque ces champs historiques manquent, le panneau l’indique et propose
+**Observer les prochains apprentissages en session**. Cette observation commence
+avec les diagnostics reçus pendant l’ouverture du panneau. Les bornes physiques
+des épisodes de temps mort restent indisponibles dans le schéma public.
+
+Les pourcentages décrivent le remplissage de l’historique. La confiance du modèle
+et les drapeaux de fiabilité sont affichés séparément.
 
 Lecture Recorder via la session authentifiée de Home Assistant ; repli explicite
 sur un historique de session en mémoire si les données sont absentes ou refusées.

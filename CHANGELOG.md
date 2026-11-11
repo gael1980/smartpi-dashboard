@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.2.7 — 2026-11-11
+
+- Onglet Apprentissage avec température, consigne filtrée, commande appliquée,
+  variations thermiques colorées et repères A/B et temps morts selon la couverture.
+- Progression A/B persistante jusqu’à l’objectif publié de mesures conservées,
+  avec palier initial, état des temps morts et motifs d’attente.
+- Graphe de collecte et observation de session pour les compteurs disponibles.
+- Distinction des mesures collectées, mises à jour acceptées et dates de publication.
+
+
 ## 0.2.4 — 2026-11-08
 
 - Vue en direct avec mesure, consigne filtrée, demande et sortie appliquée.
