@@ -1,4 +1,185 @@
-# Visual diagnostics 0.2
+# Visual diagnostics 0.3
+
+## Trois vues historiques descriptives (0.3.2)
+
+Ces vues utilisent exclusivement la fenêtre et la source Recorder ou session
+sélectionnées. Le bandeau de période est aussi présent dans Régulation ; il
+ne transforme pas le schéma du régulateur courant en historique.
+
+| Vue | Champs de la même publication | Lecture et exclusions |
+| --- | --- | --- |
+| Supervision : nuage écart / commande | `history.setpoint.filtered_setpoint - history.temperature.indoor`, `history.power.applied_percent` | Écart filtré, distinct de l’erreur I brute. Commande appliquée entre 0 et 100 %, zéro conservé. Une publication sans les deux valeurs est exclue. Le nombre de points n’est pas une durée ni une densité de temps. |
+| Régulation : demande et sortie | `history.power.command_percent`, `history.power.applied_percent` | La demande reste non écrêtée ; sortie valide entre 0 et 100 %. Les deux courbes sont absentes si le couple est incomplet. La zone entre elles n’est ni une énergie perdue ni une cause d’écart ; les escaliers ne sont pas des mesures intermédiaires. |
+| Santé du modèle : parcours A/B | `history.model.a`, `history.model.b` | Couples publiés simultanément, dans l’ordre des publications. Les répétitions consécutives sont regroupées avec leurs dates et effectifs ; elles ne deviennent pas un compteur de mises à jour acceptées. La confiance actuelle ne qualifie pas rétroactivement ces points. |
+
+Les tracés demande/sortie et A/B sont coupés aux données manquantes ou
+indisponibles et aux interruptions supérieures à 10 min. Aucun point n’est ajouté
+pour remplir un trou. Pour les vues XY, au-delà de 600 points, le nuage conserve
+600 publications réparties dans la fenêtre, extrémités comprises ; le parcours
+garde les 600 derniers couples distincts. Effectifs, réduction et dates sont
+affichés. Les tables paginées et la sélection clavier portent sur ces points
+affichés. Zoomer permet d’examiner une période plus courte ; cliquer ou sélectionner
+un point du nuage ouvre l’inspection de sa publication dans Supervision.
+
+Le nuage conserve la convention °C des graphiques historiques existants ; ce
+n’est pas une extension complète de leur compatibilité °F. A est libellé
+°C/min/u, B min⁻¹. Ces couples n’établissent ni identifiabilité, ni convergence,
+ni causalité. Il n’y a pas de nouvelle estimation ou de score de performance.
+
+Matrice confrontée à `diagnostics.py` SmartPI au SHA
+[`7da7dd7143b7ab0413b4aa54003362727b777c29`](https://github.com/KipK/vtherm_smartpi/blob/7da7dd7143b7ab0413b4aa54003362727b777c29/custom_components/vtherm_smartpi/smartpi/diagnostics.py) :
+les pourcentages viennent respectivement de `u_cmd` et `u_applied`, et les
+coefficients historiques sont des valeurs publiées arrondies. La revue de
+portée ECC retient [Bacher & Madsen (2011)](https://doi.org/10.1016/j.enbuild.2011.02.005)
+et [Guo et al. (2020, prépublication)](https://arxiv.org/abs/2001.09141)
+pour les limites de modélisation thermique et de validation. Elle ne constitue
+pas une validation scientifique de ces graphes ni de leur utilisabilité.
+
+## Bande de commande au-dessus de la règle (0.3.2, 12 novembre 2026)
+
+La longueur totale de la flèche reprend `live.power.applied_percent` : 0–100 %
+sur une piste de largeur fixe. Le sens vient du mode climate actif (heat vers
+les températures hautes, cool vers les basses). À zéro, la valeur reste écrite
+sans flèche ; hors plage, non numérique ou indisponible ne devient jamais zéro.
+Un mode non directionnel présente une barre neutre. Il s’agit d’un pourcentage
+de commande, sans unité de puissance ni preuve de chaleur délivrée.
+
+Le chevron bleu de retour est indépendant : gauche en heat au-dessus de la
+consigne, droite en cool au-dessous. Son texte dit « retour visé » ; aucune
+commande de refroidissement ou variation mesurée n’en est déduite. Le repère
+« À la consigne affichée » compare mesure et cible arrondies au dixième affiché,
+sans utiliser ni inventer une tolérance Twin. Les aperçus ne changent pas la
+référence : elle reste la consigne active, distincte de la consigne filtrée.
+
+Les deux indications demandent une liaison unique et disponible et une
+publication valide de moins de 10 min, au plus 60 s dans le futur et au moins
+aussi récente que l’état climate. Le timer local existant retire une valeur
+périmée. Mesure, unité ou cible manquante : écart indisponible ; le pourcentage
+peut rester visible si lui seul est exploitable. Aucun abonnement ou appel
+réseau supplémentaire ; les gardes ETA et les commandes explicites ne changent pas.
+
+Champ confronté au builder `_build_power` du diagnostic SmartPI au commit
+[`7da7dd7143b7ab0413b4aa54003362727b777c29`](https://github.com/KipK/vtherm_smartpi/blob/7da7dd7143b7ab0413b4aa54003362727b777c29/custom_components/vtherm_smartpi/smartpi/diagnostics.py) :
+`applied_percent` provient de `algo.u_applied`, séparé de `u_cmd` et `u_limited`.
+Cette lecture ciblée ne remplace pas les revues antérieures des autres champs.
+
+## Durcissement (0.3.1)
+
+Les requêtes de métadonnées sont validées par action avant toute mutation :
+champs autorisés, types, noms et identifiants bornés. Limites globales de l’API
+administrateur : 120 lectures et 30 mutations par minute ; les flux sont séparés.
+Les commandes climate conservent leur validation explicite et ne sont pas
+renvoyées automatiquement si le reçu échoue.
+
+Le Store HA utilise `private=True` (fichier 0600) et `atomic_writes=True`.
+Comme `Store.async_save` peut seulement journaliser une erreur d’écriture,
+chaque mutation utilisateur ajoute un identifiant de sauvegarde et vérifie sa
+présence par un second Store en lecture seule, sans sauvegarde en attente.
+Un échec reste non confirmé ; la mutation peut être présente en mémoire :
+actualiser avant de réessayer. Le journal de mesures reste sauvegardé en différé
+par HA ; une coupure brutale peut perdre les dernières observations non écrites.
+
+Les requêtes sont sérialisées. L’arrêt ferme l’accès aux nouvelles opérations,
+attend la sauvegarde active, détache les écouteurs et confie la dernière écriture
+au Store natif. Une écriture différée déjà programmée n’est pas repoussée
+par les publications suivantes : le flux continu ne peut pas affamer la sauvegarde.
+Les événements reçus pendant l’écriture ne sont pas écrasés par
+un ancien instantané. Une structure de carnet incompatible est refusée avant
+mutation ; les données ne sont pas remplacées silencieusement. La récupération
+JSON corrompu reste celle du Store HA natif et de ses sauvegardes de corruption.
+
+Le frontend valide les objets imbriqués nécessaires au rendu et borne les listes.
+Les textes personnels sont rendus comme texte Lit ; aucun HTML utilisateur n’est
+interprété. Les retours tardifs restent invalidés ; débrancher/rebrancher le
+panneau pendant une sauvegarde ne laisse pas ses contrôles bloqués. Le choix
+climate est copié avant l’attente puis revalidé juste avant le service.
+
+## Observatoire personnel (0.3.0)
+
+Ces six usages ont été explicitement demandés. Le panneau conserve la distinction
+entre intention, état HA, commande publiée et mesure. Il ne gère aucun planning.
+
+| Présentation | Source, traitement et limite |
+| --- | --- |
+| Reçu | Choix explicite du panneau ; retour du service climate ; concordance `temperature` ou `preset_mode` de l’état HA ; prochaine `live.power.applied_percent` postérieure à la confirmation ; première `live.temperature.indoor` évoluant dans le sens de la cible par rapport au départ. Un retour incertain n’est pas un échec physique prouvé. Le déplacement mesuré n’établit aucune causalité. |
+| Qui a la main ? | `specific_states.messages`, `hvac_mode_reason`, `hvac_off_reason` seulement si off/sleep, et `specific_states.inhibition.inhibited`. Libellés issus des motifs VTherm, code inconnu conservé. `requested_state.target_temperature` distingue demande conservée et cible retenue. Aucun auteur humain ou scheduler déduit. |
+| Conseil | Aperçu explicite seulement. Commande appliquée exactement à 100 % en heat et cible candidate supérieure : monter la consigne n’augmente pas la commande instantanée. Aucune inférence de puissance réelle ou d’économie. Arrêt, verrouillage, priorités publiées et remplacement d’un preset restent distincts. |
+| Souvenir | Nom personnel, mesure, cible brute, preset, extérieur et unité du moment. Aucun indice de confort humain calculé. Préparer reprend la cible en aperçu, unités compatibles et capacités courantes requises, puis Appliquer reste nécessaire. |
+| Essai | Commence sur la consigne déjà active. Cumule les prochaines publications : effectif, première/dernière date, min/max/dernière mesure, écart absolu maximal à la cible brute, extérieur min/max et publications sans température. Pas de moyenne temporelle, d’énergie ni de classement causal. Le ressenti est déclaré. |
+| Carnet Twin | Une prévision éligible par épisode climate/cible/mode/unité, figée à l’émission. Mêmes drapeaux, motif, fraîcheur et liaison temporelle que l’ETA ; aucun épisode créé depuis l’instantané initial ou Recorder. Le résultat est la première publication fiable `already_reached` avec ETA zéro, pas l’expiration du délai prévu. |
+
+Les interruptions supérieures à 10 min, pertes de données, changements de cible,
+mode, unité ou liaison et redémarrages interrompent les essais/prévisions en
+cours. Une perte de fiabilité ou un ETA devenu inexploitable interrompt aussi
+la prévision. Une interruption n’est ni une réussite ni un délai d’atteinte.
+La granularité des publications borne la précision de datation ; la différence
+au meilleur cas n’est pas un score de précision du PI réel. Après exclusion,
+un nouvel épisode de cible est requis pour une nouvelle prévision.
+
+`observations.py` porte les calculs descriptifs purs ; `observatory.py` lit les
+états HA avec liaison climate explicite et unique, écoute leurs changements et
+utilise le Store natif. L’intervalle minute expire les données, sans sonder les
+appareils. `services/observatory.ts` est la seule capacité frontend de métadonnées,
+via `hass.callWS`, avec délai borné et rejet des réponses obsolètes. API admin,
+actions fermées ; aucune commande backend, entité ou service ajouté.
+
+Conservation par pièce : 1 200 points récents / 48 h, 50 reçus, 50 essais et
+100 prévisions / 30 jours, 30 souvenirs jusqu’à suppression ; maximum 32 pièces.
+Les essais cumulent leurs statistiques sans stocker toutes leurs mesures.
+L’utilisateur peut supprimer chaque élément ou vider la pièce avec confirmation.
+Les observations sont locales et prospectives ; elles ne fusionnent pas Recorder
+et session. Aucun token ou envoi externe. Store : `.storage/smartpi_dashboard.observatory`.
+
+Cette extension applique la revue de portée précédente : contexte et perturbations
+explicites, prévision figée avant observation et exclusions conservées.
+[Bacher & Madsen (2011)](https://doi.org/10.1016/j.enbuild.2011.02.005) et
+[Guo et al. (2020, prépublication)](https://arxiv.org/abs/2001.09141) motivent
+la prudence sur les modèles thermiques et les perturbations non mesurées ; ces
+travaux ne valident pas l’ETA SmartPI, la causalité d’un essai ou l’efficacité
+humaine du panneau. Le code upstream de référence reste le SHA cité ci-dessous.
+Un véritable score prédictif exigerait un protocole hors échantillon, une
+référence, une couverture suffisante et une analyse des épisodes exclus.
+
+## Trajet thermique (0.2.8)
+
+À la demande explicite du 11 novembre 2026, le panneau ajoute une exception
+de commande limitée à la température et au preset, via les services climate
+officiels. Toute sélection reste locale jusqu’à **Appliquer**. Aucune commande de thermostat
+n’est déclenchée par le chargement, la navigation ou la réception d’un état.
+L’observatoire 0.3 conserve séparément ses métadonnées locales.
+Les plannings, modes HVAC, coefficients, calibration et réglages SmartPI ne
+sont pas modifiés par cette interface.
+
+| Élément | Source et règle |
+| --- | --- |
+| Mesure actuelle | `live.temperature.indoor` ; valeur numérique finie de la publication disponible. Le handler transmet les températures natives du thermostat à SmartPI, sans conversion supplémentaire. |
+| Consigne active | Attribut `temperature` du climate explicitement lié par `specific_states.regulation_diagnostics`. Cette consigne utilisateur est distincte de la consigne filtrée du régulateur. |
+| Consigne filtrée | `live.setpoint.filtered_setpoint`, affichée séparément si différente ; jamais utilisée comme valeur à envoyer au thermostat. |
+| Presets | Liste `preset_modes` du climate ; températures `preset_temperatures.<preset>[_cool][_away]_temp`, selon mode actif et absence publiés. Les presets dynamiques ou sans température publiée restent sélectionnables sans position thermique inventée. |
+| Commande | `services/climate.ts` valide à nouveau liaison, disponibilité, verrouillage, capacités, bornes, pas et contexte avant `climate.set_temperature` ou `climate.set_preset_mode`. Aucune autre action. Le succès d’envoi ne remplace pas un retour d’état HA. |
+| ETA | `live.analysis.twin.eta_s` et `eta_reason` ; `twin_status=ok`, `twin_model_reliable=true`, `twin_warming_up=false` et `model.tau_reliable=true` obligatoires. Un délai positif fini avec motif `ok`, au plus 48 h, ou zéro avec `already_reached`. Sinon l’encart est absent. |
+| Fraîcheur ETA | Publication horodatée, postérieure ou égale à l’état climate courant, datant de moins de 10 min (borne conservatrice de présentation, pas un seuil validé expérimentalement). Un timer local retire l’ETA périmé sans requête réseau. Après envoi ou changement de contexte, attendre une nouvelle publication. |
+| Aperçu | Température ou preset candidat en pointillé ; la consigne active reste visible. Aucun ETA de la consigne active n’est réutilisé pour le candidat. |
+
+L’ETA upstream est `eta_best_case` : à commande maximale en chauffe, dans les
+hypothèses constantes de son modèle, avec temps mort fiable s’il est disponible.
+Il ne prédit pas la trajectoire réelle du PI, du scheduler ou des limites de
+puissance. Pas d’intervalle de confiance fabriqué, de compteur décrémenté, de
+calcul à partir de τ, ni de barre de progression temporelle. L’échelle du trajet
+est une échelle de température ; les symboles diffèrent en forme et les valeurs
+textuelles restent accessibles. Un modèle déclaré fiable ne certifie ni la
+justesse physique des paramètres ni la précision des délais réels.
+
+Sources confrontées sur le commit SmartPI
+[`f7ee1cbb744abd89133ddbd33983fcf3695faa55`](https://github.com/KipK/vtherm_smartpi/tree/f7ee1cbb744abd89133ddbd33983fcf3695faa55) :
+[`diagnostics.py`, `_build_analysis_twin`](https://github.com/KipK/vtherm_smartpi/blob/f7ee1cbb744abd89133ddbd33983fcf3695faa55/custom_components/vtherm_smartpi/smartpi/diagnostics.py),
+[`thermal_twin_1r1c.py`, `update_with_eta` et `eta_best_case`](https://github.com/KipK/vtherm_smartpi/blob/f7ee1cbb744abd89133ddbd33983fcf3695faa55/custom_components/vtherm_smartpi/smartpi/thermal_twin_1r1c.py),
+[`handler.py`, `refresh`](https://github.com/KipK/vtherm_smartpi/blob/f7ee1cbb744abd89133ddbd33983fcf3695faa55/custom_components/vtherm_smartpi/handler.py).
+
+La nouvelle vue utilise l’unité native publiée par le thermostat ou la
+configuration HA. Les graphiques et fiches historiques existants sont encore
+conçus pour une installation en °C ; leur généralisation aux °F reste à faire
+avant d’annoncer cette compatibilité pour tout le panneau.
 
 ## Régulation en direct (0.2.4)
 

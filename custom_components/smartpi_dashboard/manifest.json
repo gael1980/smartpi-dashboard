@@ -1,20 +1,24 @@
 {
   "domain": "smartpi_dashboard",
   "name": "SmartPI Dashboard",
-  "version": "0.2.7",
-  "documentation": "https://github.com/gael1980/smartpi-dashboard",
-  "issue_tracker": "https://github.com/gael1980/smartpi-dashboard/issues",
+  "categories": [
+    "climate.thermostats_heating"
+  ],
   "codeowners": [
     "@gael1980"
   ],
+  "config_flow": true,
   "dependencies": [
     "frontend",
     "http",
-    "panel_custom"
+    "panel_custom",
+    "websocket_api"
   ],
-  "config_flow": true,
+  "documentation": "https://github.com/gael1980/smartpi-dashboard",
   "integration_type": "service",
   "iot_class": "calculated",
+  "issue_tracker": "https://github.com/gael1980/smartpi-dashboard/issues",
+  "requirements": [],
   "single_config_entry": true,
-  "requirements": []
+  "version": "0.3.2"
 }

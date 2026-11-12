@@ -106,6 +106,21 @@ try {
   assert.equal(checks.initial.charts, 3);
   assert.ok(checks.initial.canvas);
   assert.ok(checks.initial.rows > 5700);
+  checks.scatterProjection = await run(`
+    const xy=root.querySelector('smartpi-diagnostic-projection');await xy.updateComplete;
+    return xy.kind==='scatter'&&xy.shadowRoot.querySelector('svg')?.getAttribute('aria-label').includes('600 points')&&
+      xy.shadowRoot.textContent.includes('publications couplées')&&xy.shadowRoot.textContent.includes('600 publications réparties');
+  `);
+  assert.ok(checks.scatterProjection);
+  await run(`const xy=root.querySelector('smartpi-diagnostic-projection');xy.shadowRoot.querySelector('input').focus();`);
+  await send('Input.dispatchKeyEvent',{type:'keyDown',key:'ArrowLeft',code:'ArrowLeft',windowsVirtualKeyCode:37});
+  await send('Input.dispatchKeyEvent',{type:'keyUp',key:'ArrowLeft',code:'ArrowLeft',windowsVirtualKeyCode:37});
+  checks.scatterKeyboardInspection = await run(`
+    const xy=root.querySelector('smartpi-diagnostic-projection');await xy.updateComplete;await v.updateComplete;
+    const good=xy.selected>=0&&v.inspection?.time===xy.projection.points[xy.selected].time&&xy.shadowRoot.activeElement?.tagName==='INPUT';
+    xy.selected=-1;v.inspection=undefined;await v.updateComplete;return good;
+  `);
+  assert.ok(checks.scatterKeyboardInspection);
   await run(`root.querySelector('[aria-label="Zoom avant"]').click();`);
   await settle();
   checks.zoom = await run(
@@ -278,7 +293,7 @@ try {
     `const d=root.querySelector('smartpi-control-diagram'),b=d.shadowRoot.querySelectorAll('g[role="button"]')[2];b.focus();b.dispatchEvent(new KeyboardEvent('keydown',{key:' ',bubbles:true}));await d.updateComplete;const detail=d.shadowRoot.querySelector('aside').textContent;return b.getAttribute('aria-pressed')==='true'&&d.shadowRoot.activeElement===b&&detail.includes('0,5 °C')&&detail.includes('0,8 °C')&&detail.includes('attributes.live.analysis.control.error_p')&&!!d.shadowRoot.querySelector('time[datetime]');`,
   );
   assert.ok(checks.piDetail);
-  checks.liveSeparation = await run(`return !root.querySelector('.toolbar, .source, .tracking, .timeline')&&!!root.querySelector('smartpi-control-diagram');`);
+  checks.liveSeparation = await run(`return !root.querySelector('.tracking, .timeline')&&!!root.querySelector('smartpi-control-diagram')&&!!root.querySelector('.toolbar')&&!!root.querySelector('.command-comparison smartpi-time-chart')&&root.textContent.includes('Le schéma reste l’instantané actuel');`);
   assert.ok(checks.liveSeparation);
   checks.liveRoutes = await run(`
     const d=root.querySelector('smartpi-control-diagram'),s=d.shadowRoot,base=d.diagnostic;
@@ -329,6 +344,43 @@ try {
     `return root.querySelectorAll('smartpi-time-chart').length===2&&!root.textContent.includes('120 °C')&&root.textContent.includes('Aucune courbe Twin');`,
   );
   assert.ok(checks.model);
+  checks.modelProjection = await run(`const xy=root.querySelector('smartpi-diagnostic-projection');await xy.updateComplete;return xy.kind==='model'&&!!xy.shadowRoot.querySelector('svg')&&xy.shadowRoot.textContent.includes('la confiance actuelle ne valide pas le passé');`);
+  assert.ok(checks.modelProjection);
+  checks.projectionGapsAndBands = await evaluate(`(async()=>{
+    const sample=(time,changes={})=>({time,state:'stable',history:{power:{command_percent:80,applied_percent:40},model:{a:.02,b:.001}},live:{},...changes});
+    const data=[sample(100),sample(200,{state:'unavailable'}),sample(300),sample(1000)];
+    const xy=document.createElement('smartpi-diagnostic-projection');xy.kind='model';xy.samples=data;document.body.append(xy);await xy.updateComplete;
+    const separated=xy.shadowRoot.querySelectorAll('path.trajectory').length===3;
+    const chart=document.createElement('smartpi-time-chart');chart.commandComparison=true;chart.percent=true;chart.range=[90,1100];chart.heading='Comparaison synthétique';chart.samples=data;
+    chart.curves=[{label:'Demandée',path:'power.command_percent',color:'#d6892e',unit:'%',step:true},{label:'Appliquée',path:'power.applied_percent',color:'#2689ca',unit:'%',step:true}];
+    document.body.append(chart);await chart.updateComplete;
+    const bands=chart.plot?.bands.length===2&&chart.plot.data[1][1]===null&&chart.plot.data[2][1]===null&&chart.plot.series[1].gaps(chart.plot,1,0,3,[]).length>0;
+    xy.remove();chart.remove();return separated&&bands&&!xy.observer&&!chart.observer&&!chart.plot;
+  })()`);
+  assert.ok(checks.projectionGapsAndBands);
+  checks.commandBandPixels = await evaluate(`(async()=>{
+    const chart=document.createElement('smartpi-time-chart');chart.commandComparison=true;chart.percent=true;chart.range=[0,6];chart.heading='Zone entre commandes';
+    chart.curves=[{label:'Demandée',path:'power.command_percent',color:'#d6892e',unit:'%',step:true},{label:'Appliquée',path:'power.applied_percent',color:'#2689ca',unit:'%',step:true}];
+    chart.samples=[1,2,3,4,5].map(time=>({time,state:'stable',live:{},history:{power:{command_percent:time<3?80:40,applied_percent:time<3?40:80}}}));
+    document.body.append(chart);await chart.updateComplete;await new Promise(resolve=>requestAnimationFrame(resolve));
+    const u=chart.plot,alpha=time=>u.ctx.getImageData(Math.round(u.valToPos(time,'x',true)),Math.round(u.valToPos(57,'y',true)),1,1).data[3];
+    const values=[alpha(1.5),alpha(4.5)];chart.remove();return values;
+  })()`);
+  assert.ok(checks.commandBandPixels.every(alpha=>alpha>0),'Both directions of command difference must have a visible band');
+  checks.analysisResponsive = {};
+  for (const [width,height] of [[1440,1000],[390,844],[320,800]]) {
+    await send('Emulation.setDeviceMetricsOverride',{width,height,deviceScaleFactor:1,mobile:width<500});
+    await send('Emulation.setEmulatedMedia',{features:[{name:'prefers-color-scheme',value:width===1440?'light':'dark'},{name:'prefers-reduced-motion',value:'reduce'}]});
+    for (const tab of ['evolution','regulation','model']) {
+      await run(`v.tab='${tab}';await v.updateComplete;`);await settle();
+      const bounds=await run(`const target=root.querySelector('${tab==='regulation'?'.command-comparison':'smartpi-diagnostic-projection'}');await target.updateComplete;target.scrollIntoView({block:'start'});const b=target.getBoundingClientRect();return {x:b.x+scrollX,y:b.y+scrollY,width:b.width,height:Math.min(b.height,1600)};`);
+      const shot=await send('Page.captureScreenshot',{format:'png',captureBeyondViewport:true,clip:{...bounds,scale:1}});
+      await writeFile(output+'/analysis-'+tab+'-'+width+'.png',Buffer.from(shot.data,'base64'));
+      checks.analysisResponsive[tab+'-'+width]=await evaluate('document.documentElement.scrollWidth<=innerWidth');
+      assert.ok(checks.analysisResponsive[tab+'-'+width],'Analysis overflow '+tab+' '+width);
+    }
+  }
+  await run(`v.tab='model';await v.updateComplete;`);
   await send("Emulation.setDeviceMetricsOverride", {
     width: 390,
     height: 844,
@@ -446,11 +498,242 @@ try {
   );
   assert.ok(checks.reactivity);
   checks.cleanup = await run(
-    `v.tab='evolution';await v.updateComplete;const charts=[...root.querySelectorAll('smartpi-time-chart')];p.remove();return charts.every(c=>!c.plot&&!c.observer)&&p.sessionHistory.get('sensor.salon').length===0;`,
+    `v.tab='evolution';await v.updateComplete;const charts=[...root.querySelectorAll('smartpi-time-chart')],xy=[...root.querySelectorAll('smartpi-diagnostic-projection')];p.remove();return charts.every(c=>!c.plot&&!c.observer)&&xy.every(c=>!c.observer)&&p.sessionHistory.get('sensor.salon').length===0;`,
   );
   assert.ok(checks.cleanup);
   assert.equal(await evaluate("fixture.counts.writes"), 0);
-  assert.deepEqual(errors, []);
+  // Separate synthetic scene: the two explicitly authorized climate actions.
+  await send('Emulation.setEmulatedMedia',{features:[{name:'prefers-color-scheme',value:'light'}]});
+  await send("Page.navigate", {url: "http://127.0.0.1:8765/frontend/tests/thermal-browser.html"});
+  for (let n = 0; n < 50; n++) {
+    if (await evaluate("!!window.thermalFixture?.panel.shadowRoot.querySelector('smartpi-thermal-journey')?.shadowRoot")) break;
+    await pause(100);
+  }
+  const journey = script => evaluate(`(async()=>{const f=thermalFixture,p=f.panel,j=p.shadowRoot.querySelector('smartpi-thermal-journey'),r=j.shadowRoot;${script}})()`);
+  const sync = `f.publish();await p.updateComplete;await j.updateComplete;`;
+  checks.journeyInitial = await journey(`return {calls:f.calls.length,eta:r.querySelector('.eta')?.textContent.includes('35 min'),target:r.querySelector('.destination').textContent.includes('20'),measured:r.querySelector('.measured').textContent.includes('19,2')};`);
+  assert.equal(checks.journeyInitial.calls, 0);
+  assert.ok(checks.journeyInitial.eta && checks.journeyInitial.target && checks.journeyInitial.measured);
+  checks.journeyEffortProportion = await journey(`
+    const results=[];
+    for(const percent of [0,15,68,100]){
+      f.sensor.attributes.live.power.applied_percent=percent;${sync}
+      const meter=r.querySelector('[role=meter]'),arrow=r.querySelector('.effort-arrow');
+      results.push(meter?.getAttribute('aria-valuenow')===String(percent)&&
+        (percent===0?!arrow:Math.abs(arrow.getBoundingClientRect().width/meter.getBoundingClientRect().width-percent/100)<.001));
+    }
+    f.sensor.attributes.live.power.applied_percent=42;${sync}return results.every(Boolean)&&getComputedStyle(r.querySelector('.effort-arrow')).clipPath!=='none';
+  `);
+  assert.ok(checks.journeyEffortProportion);
+  checks.journeyOvershootAndZero = await journey(`
+    f.sensor.attributes.live.temperature.indoor=20.3;f.sensor.attributes.live.power.applied_percent=12;${sync}
+    const positive=r.querySelector('.return-chevron')?.dataset.direction==='left'&&r.querySelector('.setpoint-position').textContent.includes('+0,3')&&
+      !r.querySelector('.effort-arrow').classList.contains('reverse')&&r.querySelector('[role=meter]').getAttribute('aria-valuenow')==='12';
+    f.sensor.attributes.live.power.applied_percent=0;${sync}
+    const zero=!r.querySelector('.effort-arrow')&&r.querySelector('.return-chevron')?.dataset.direction==='left';
+    f.sensor.attributes.live.temperature.indoor=20;${sync}
+    const aligned=!!r.querySelector('.aligned-mark')&&!r.querySelector('.return-chevron')&&r.querySelector('.setpoint-position').textContent.includes('À la consigne affichée');
+    f.climate.state='cool';f.sensor.attributes.live.temperature.indoor=19.7;f.sensor.attributes.live.power.applied_percent=68;${sync}
+    const cool=r.querySelector('.return-chevron')?.dataset.direction==='right'&&!!r.querySelector('.effort-arrow.reverse');
+    f.climate.state='heat';f.sensor.attributes.live.temperature.indoor=19.2;f.sensor.attributes.live.power.applied_percent=42;${sync}
+    f.sensor.last_updated=new Date(Date.now()+1).toISOString();${sync}
+    return positive&&zero&&aligned&&cool&&f.calls.length===0;
+  `);
+  assert.ok(checks.journeyOvershootAndZero);
+  checks.journeyEffortMissing = await journey(`
+    const oldTime=f.sensor.last_updated;const results=[];
+    for(const value of [null,-1,101]){f.sensor.attributes.live.power.applied_percent=value;${sync}results.push(!r.querySelector('[role=meter]')&&!r.querySelector('.effort-arrow'));}
+    f.sensor.attributes.live.power.applied_percent=42;f.sensor.last_updated=new Date(Date.now()-601000).toISOString();${sync}
+    results.push(!r.querySelector('[role=meter]')&&!r.querySelector('.return-chevron'));
+    f.sensor.last_updated=oldTime;${sync}return results.every(Boolean)&&!!r.querySelector('[role=meter]');
+  `);
+  assert.ok(checks.journeyEffortMissing);
+  checks.journeyEffortExpiry = await journey(`
+    const source=f.sensor.last_updated,climateTime=f.climate.last_updated;
+    f.climate.last_updated=new Date(Date.now()-601000).toISOString();f.sensor.last_updated=new Date(Date.now()-599700).toISOString();${sync}
+    const visible=!!r.querySelector('[role=meter]');await new Promise(resolve=>setTimeout(resolve,400));await j.updateComplete;
+    const expired=!r.querySelector('[role=meter]');f.climate.last_updated=climateTime;f.sensor.last_updated=source;${sync}return visible&&expired;
+  `);
+  assert.ok(checks.journeyEffortExpiry);
+  checks.journeyKeyboardFocus = await journey(`const input=r.querySelector('input');input.focus();const style=getComputedStyle(input);return r.activeElement===input&&style.outlineStyle==='solid'&&parseFloat(style.outlineWidth)>=3;`);
+  assert.ok(checks.journeyKeyboardFocus);
+  checks.journeyEtaAbsent = await journey(`
+    const twin=f.sensor.attributes.live.analysis.twin;const results=[];
+    for(const patch of [{twin_model_reliable:false},{twin_status:'unavailable'},{eta_s:null},{eta_reason:'too_far'},{twin_warming_up:true}]){
+      const old={...twin};Object.assign(twin,patch);${sync}results.push(!r.querySelector('.eta'));Object.assign(twin,old);
+    }${sync}return results.every(Boolean)&&!!r.querySelector('.eta');
+  `);
+  assert.ok(checks.journeyEtaAbsent);
+  checks.journeyPreview = await journey(`
+    const eco=[...r.querySelectorAll('.preset')].find(b=>b.textContent.includes('Éco'));eco.click();await j.updateComplete;
+    const preview=r.querySelector('.preview')?.textContent.includes('17')&&!r.querySelector('.eta')&&f.calls.length===0&&r.querySelector('.destination').textContent.includes('20')&&r.querySelector('.setpoint-position').textContent.includes('Encore 0,8')&&r.querySelector('[role=meter]').getAttribute('aria-valuenow')==='42';
+    r.querySelector('.actions button').click();await j.updateComplete;return preview&&!r.querySelector('.preview')&&!!r.querySelector('.eta');
+  `);
+  assert.ok(checks.journeyPreview);
+  await journey(`r.querySelector('input').focus();`);
+  await send("Input.dispatchKeyEvent", {type:"keyDown",key:"ArrowRight",code:"ArrowRight",windowsVirtualKeyCode:39});
+  await send("Input.dispatchKeyEvent", {type:"keyUp",key:"ArrowRight",code:"ArrowRight",windowsVirtualKeyCode:39});
+  checks.journeyKeyboard = await journey(`await j.updateComplete;return j.choice?.kind==='temperature'&&j.choice.value===20.5&&f.calls.length===0;`);
+  assert.ok(checks.journeyKeyboard);
+  checks.journeyStale = await journey(`f.climate.attributes.temperature=21;${sync}return !j.choice&&!r.querySelector('.preview')&&f.calls.length===0;`);
+  assert.ok(checks.journeyStale);
+  checks.journeyApply = await journey(`
+    [...r.querySelectorAll('.preset')].find(b=>b.textContent.includes('Éco')).click();await j.updateComplete;
+    r.querySelector('.apply').click();await j.updateComplete;await new Promise(resolve=>setTimeout(resolve,0));await j.updateComplete;
+    return f.calls.length===1&&JSON.stringify(f.calls[0])===JSON.stringify(['climate','set_preset_mode',{entity_id:'climate.demo_salon',preset_mode:'eco'}])&&r.querySelector('.destination').textContent.includes('21')&&!j.choice;
+  `);
+  assert.ok(checks.journeyApply);
+  checks.journeyTemperature = await journey(`
+    r.querySelector('[aria-label="Augmenter la température"]').click();await j.updateComplete;r.querySelector('.apply').click();
+    await new Promise(resolve=>setTimeout(resolve,0));await j.updateComplete;
+    return f.calls.length===2&&JSON.stringify(f.calls[1])===JSON.stringify(['climate','set_temperature',{entity_id:'climate.demo_salon',temperature:21.5}]);
+  `);
+  assert.ok(checks.journeyTemperature);
+  checks.journeyRefused = await journey(`
+    f.setReject(true);r.querySelector('[aria-label="Augmenter la température"]').click();await j.updateComplete;r.querySelector('.apply').click();
+    await new Promise(resolve=>setTimeout(resolve,0));await j.updateComplete;
+    return f.calls.length===3&&r.querySelector('[role=status]').textContent.includes('refusée')&&!!r.querySelector('.preview');
+  `);
+  assert.ok(checks.journeyRefused);
+  checks.journeyPending = await journey(`
+    f.setReject(false);let resolve;f.setPending(new Promise(r=>resolve=r));r.querySelector('.apply').click();await j.updateComplete;
+    r.querySelector('.apply').click();await new Promise(resolve=>setTimeout(resolve,0));const blocked=f.calls.length===4&&r.querySelector('.apply').disabled;
+    f.climate.entity_id='climate.other';f.climate.attributes.specific_states.regulation_diagnostics='sensor.other';${sync}
+    resolve();await new Promise(r=>setTimeout(r,0));await j.updateComplete;f.setPending(undefined);
+    return blocked&&!r.querySelector('.preview')&&!r.querySelector('.eta')&&!r.querySelector('[role=status]').textContent.includes('Demande envoyée');
+  `);
+  assert.ok(checks.journeyPending);
+  await journey(`f.climate.entity_id='climate.demo_salon';f.climate.attributes.specific_states.regulation_diagnostics=f.sensor.entity_id;f.climate.attributes.temperature=20;${sync}f.sensor.last_updated=new Date(Date.now()+1).toISOString();${sync}`);
+  checks.journeyResponsive = {};
+  for (const [width,height] of [[1440,1000],[390,844],[320,800]]) {
+    await send('Emulation.setDeviceMetricsOverride',{width,height,deviceScaleFactor:1,mobile:width<500});
+    await settle();
+    const bounds=await journey(`j.scrollIntoView({block:'start'});const b=j.getBoundingClientRect();return {x:b.x+scrollX,y:b.y+scrollY,width:b.width,height:b.height};`);
+    const capture=await send('Page.captureScreenshot',{format:'png',captureBeyondViewport:true,clip:{...bounds,scale:1}});
+    await writeFile(output+`/thermal-${width}.png`,Buffer.from(capture.data,'base64'));
+    checks.journeyResponsive[width]=await journey(`return document.documentElement.scrollWidth<=innerWidth&&[...r.querySelectorAll('button')].filter(b=>!b.disabled).every(b=>b.getBoundingClientRect().height>=44);`);
+    assert.ok(checks.journeyResponsive[width]);
+  }
+  for (const [scene,width,height,temp,percent,mode] of [
+    ['heating',1440,1000,19.2,68,'heat'],['overshoot',390,844,20.3,12,'heat'],
+    ['overshoot-zero',320,800,20.3,0,'heat'],['aligned',390,844,20,0,'heat'],['cooling',390,844,19.7,68,'cool']
+  ]) {
+    await send('Emulation.setDeviceMetricsOverride',{width,height,deviceScaleFactor:1,mobile:width<500});
+    await journey(`f.climate.state='${mode}';f.sensor.attributes.live.temperature.indoor=${temp};f.sensor.attributes.live.power.applied_percent=${percent};Object.assign(f.sensor.attributes.live.analysis.twin,{eta_s:${scene === 'heating' ? 2100 : 'null'},eta_reason:'${scene === 'heating' ? 'ok' : 'unavailable'}'});f.sensor.last_updated=new Date(Date.now()+1).toISOString();${sync}`);
+    await settle();
+    const bounds=await journey(`j.scrollIntoView({block:'start'});const b=j.getBoundingClientRect();return {x:b.x+scrollX,y:b.y+scrollY,width:b.width,height:b.height};`);
+    const shot=await send('Page.captureScreenshot',{format:'png',captureBeyondViewport:true,clip:{...bounds,scale:1}});
+    await writeFile(output+'/effort-'+scene+'.png',Buffer.from(shot.data,'base64'));
+    assert.ok(await journey(`return document.documentElement.scrollWidth<=innerWidth;`),'Effort scene overflow '+scene);
+  }
+  await journey(`f.climate.state='heat';f.sensor.attributes.live.temperature.indoor=19.2;f.sensor.attributes.live.power.applied_percent=42;Object.assign(f.sensor.attributes.live.analysis.twin,{eta_s:2100,eta_reason:'ok'});${sync}`);
+  await send('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:true});
+  await send('Emulation.setEmulatedMedia',{features:[{name:'prefers-color-scheme',value:'dark'},{name:'prefers-reduced-motion',value:'reduce'}]});
+  await settle();
+  const darkBounds=await journey(`const b=j.getBoundingClientRect();return {x:b.x+scrollX,y:b.y+scrollY,width:b.width,height:b.height};`);
+  const dark=await send('Page.captureScreenshot',{format:'png',captureBeyondViewport:true,clip:{...darkBounds,scale:1}});
+  await writeFile(output+'/thermal-dark-390.png',Buffer.from(dark.data,'base64'));
+  const observatory = script => evaluate(`(async()=>{const f=thermalFixture,p=f.panel,j=p.shadowRoot.querySelector('smartpi-thermal-journey'),o=p.shadowRoot.querySelector('smartpi-observatory'),r=o.shadowRoot;${script}})()`);
+  checks.observatoryLoaded = await observatory(`await o.refresh();await o.updateComplete;return !!o.room&&!o.error&&r.textContent.includes('Reçus de chauffe');`);
+  assert.ok(checks.observatoryLoaded);
+  const initialClimateCalls = await evaluate('thermalFixture.calls.length');
+  checks.authorityAndAdvice = await observatory(`
+    f.climate.state='off';f.climate.attributes.specific_states.hvac_off_reason='hvac_off_window_detection';f.climate.attributes.requested_state={target_temperature:21};f.publish();await p.updateComplete;await j.updateComplete;
+    const authority=j.shadowRoot.querySelector('.authority').textContent.includes('Fenêtre ouverte');
+    f.climate.state='heat';delete f.climate.attributes.specific_states.hvac_off_reason;f.sensor.attributes.live.power.applied_percent=100;f.publish();await p.updateComplete;await j.updateComplete;
+    j.shadowRoot.querySelector('[aria-label="Augmenter la température"]').click();await j.updateComplete;
+    const good=authority&&j.shadowRoot.querySelector('.advice').textContent.includes('déjà à 100');
+    j.shadowRoot.querySelector('.actions button').click();delete f.climate.attributes.specific_states.hvac_off_reason;f.sensor.attributes.live.power.applied_percent=42;f.publish();await p.updateComplete;return good;
+  `);
+  assert.ok(checks.authorityAndAdvice);
+  checks.comfortBookmark = await observatory(`
+    r.querySelector('[data-view=bookmarks]').click();await o.updateComplete;
+    const input=r.querySelector('#bookmark-name');input.value='Lecture du soir';r.querySelector('form').requestSubmit();
+    await new Promise(resolve=>setTimeout(resolve,0));await o.updateComplete;
+    const saved=r.textContent.includes('Lecture du soir')&&o.room.bookmarks.length===1;
+    [...r.querySelectorAll('button')].find(b=>b.textContent.includes('Préparer')).click();await p.updateComplete;await j.updateComplete;
+    const preview=!!j.shadowRoot.querySelector('.preview')&&j.choice.value===20;
+    j.shadowRoot.querySelector('.actions button').click();await j.updateComplete;
+    return saved&&preview;
+  `);
+  assert.ok(checks.comfortBookmark);
+  checks.trialAndFeedback = await observatory(`
+    r.querySelector('[data-view=trials]').click();await o.updateComplete;r.querySelector('#trial-name').value='Soirée à 20';r.querySelector('form').requestSubmit();
+    await new Promise(resolve=>setTimeout(resolve,0));await o.updateComplete;
+    const started=o.room.trials.length===1&&r.textContent.includes('Soirée à 20');
+    [...r.querySelectorAll('button')].find(b=>b.textContent.includes('Terminer l’essai')).click();await new Promise(resolve=>setTimeout(resolve,0));await o.updateComplete;
+    const select=r.querySelector('select');select.value='good';select.dispatchEvent(new Event('change',{bubbles:true}));await new Promise(resolve=>setTimeout(resolve,0));await o.updateComplete;
+    return started&&o.room.trials[0].status==='finished'&&o.room.trials[0].feedback==='good';
+  `);
+  assert.ok(checks.trialAndFeedback);
+  checks.trialComparison = await observatory(`
+    const book=f.getBook(f.sensor.entity_id),first=book.trials[0];Object.assign(first.summary,{publications:12,minimum:19.5,maximum:20.1,last:20,max_abs_error:.5});
+    book.trials.push({...structuredClone(first),id:'comparison-trial',label:'Autre soirée',target:19.5,outdoor:3,feedback:'cold'});
+    await o.refresh();await o.updateComplete;[...r.querySelectorAll('.compare input')].forEach(box=>box.click());await o.updateComplete;
+    return !!r.querySelector('table')&&r.querySelector('.comparison').textContent.includes('Conditions et durées peuvent différer');
+  `);
+  assert.ok(checks.trialComparison);
+  checks.forecastNotebook = await observatory(`
+    f.getBook(f.sensor.entity_id).forecasts=[{id:'forecast-ok',started_at:Date.now()/1000-2400,target:20,temperature:19.2,outdoor:8,unit:'°C',eta_s:1800,status:'reached',observed_s:2400,observed_at:Date.now()/1000},{id:'forecast-gap',started_at:Date.now()/1000-1000,target:21,temperature:19,unit:'°C',eta_s:3000,status:'excluded',reason:'Interruption de données supérieure à 10 min'}];
+    await o.refresh();r.querySelector('[data-view=forecasts]').click();await o.updateComplete;
+    return r.textContent.includes('30 min')&&r.textContent.includes('40 min')&&r.textContent.includes('Interruption de données')&&r.querySelector('.counts').textContent.includes('1 atteinte');
+  `);
+  assert.ok(checks.forecastNotebook);
+  for (const [width,height] of [[1440,1000],[390,844],[320,800]]) {
+    await send('Emulation.setDeviceMetricsOverride',{width,height,deviceScaleFactor:1,mobile:width<500});
+    for (const tab of ['receipts','bookmarks','trials','forecasts']) {
+      await observatory(`r.querySelector('[data-view=${tab}]').click();await o.updateComplete;`);
+      await settle();
+      const bounds=await observatory(`o.scrollIntoView({block:'start'});const b=o.getBoundingClientRect();return {x:b.x+scrollX,y:b.y+scrollY,width:b.width,height:Math.min(b.height,1600)};`);
+      const capture=await send('Page.captureScreenshot',{format:'png',captureBeyondViewport:true,clip:{...bounds,scale:1}});
+      await writeFile(output+`/observatory-${tab}-${width}.png`,Buffer.from(capture.data,'base64'));
+      assert.ok(await observatory(`return document.documentElement.scrollWidth<=innerWidth;`),'Observatory overflow '+tab+' '+width);
+    }
+  }
+  checks.observatoryRefusal = await observatory(`f.setMetadataReject(true);await o.refresh();await o.updateComplete;const refused=r.textContent.includes('Stockage local refusé');f.setMetadataReject(false);await o.refresh();await o.updateComplete;return refused&&!o.error;`);
+  assert.ok(checks.observatoryRefusal);
+  checks.observatoryDelete = await observatory(`
+    r.querySelector('[data-view=bookmarks]').click();await o.updateComplete;
+    [...r.querySelectorAll('.entries button')].find(b=>b.textContent.trim()==='Supprimer').click();await new Promise(resolve=>setTimeout(resolve,0));await o.updateComplete;
+    const removed=o.room.bookmarks.length===0;r.querySelector('.storage').open=true;
+    [...r.querySelectorAll('.storage button')].find(b=>b.textContent.includes('Effacer les données')).click();await o.updateComplete;
+    const armed=!![...r.querySelectorAll('button')].find(b=>b.textContent.includes('Confirmer l’effacement'));
+    [...r.querySelectorAll('button')].find(b=>b.textContent.includes('Confirmer l’effacement')).click();await new Promise(resolve=>setTimeout(resolve,0));await o.updateComplete;
+    return removed&&armed&&o.room.trials.length===0&&o.room.forecasts.length===0&&o.room.receipts.length===0;
+  `);
+  assert.ok(checks.observatoryDelete);
+  checks.observatoryMalformedResponse = await observatory(`
+    const book=f.getBook(f.sensor.entity_id);book.trials.push({id:'incomplete'});
+    await o.refresh();await o.updateComplete;const refused=!!o.error&&r.textContent.includes('non reconnue');
+    book.trials=[];await o.refresh();await o.updateComplete;return refused&&!o.error;
+  `);
+  assert.ok(checks.observatoryMalformedResponse);
+  checks.observatoryTextEscaping = await observatory(`
+    const label='<img src=x onerror="window.smartpiXss=true">';
+    await o.mutate('bookmark_save',{label});r.querySelector('[data-view=bookmarks]').click();await o.updateComplete;
+    const escaped=r.textContent.includes(label)&&!r.querySelector('img')&&!window.smartpiXss;
+    await o.mutate('bookmark_delete',{id:o.room.bookmarks[0].id});return escaped;
+  `);
+  assert.ok(checks.observatoryTextEscaping);
+  checks.observatoryReconnectDuringSave = await observatory(`
+    const original=f.hass.callWS;let release;const gate=new Promise(resolve=>release=resolve);
+    p.hass={...f.hass,callWS:async msg=>{if(msg.action==='bookmark_save')await gate;return original(msg)}};
+    await p.updateComplete;await o.updateComplete;
+    const saving=o.mutate('bookmark_save',{label:'Retour au panneau'});await o.updateComplete;
+    const parent=o.parentNode,next=o.nextSibling;o.remove();parent.insertBefore(o,next);await o.updateComplete;
+    release();await saving;await o.refresh();await o.updateComplete;
+    const recovered=!o.saving&&!o.loading&&o.room.bookmarks.some(b=>b.label==='Retour au panneau');
+    p.hass=f.hass;await p.updateComplete;await o.updateComplete;
+    await o.mutate('bookmark_delete',{id:o.room.bookmarks.find(b=>b.label==='Retour au panneau').id});
+    return recovered;
+  `);
+  assert.ok(checks.observatoryReconnectDuringSave);
+  assert.equal(await evaluate('thermalFixture.calls.length'),initialClimateCalls,'Observatory metadata and bookmark previews must not issue climate commands');
+  checks.journeyLocked = await journey(`f.climate.attributes.specific_states.is_locked=true;${sync}return !r.querySelector('input')&&[...r.querySelectorAll('button')].every(b=>b.disabled);`);
+  assert.ok(checks.journeyLocked);
+  checks.journeyMissing = await journey(`f.sensor.state='unavailable';${sync}return !r.querySelector('.eta')&&!r.querySelector('input')&&r.querySelector('.measured').textContent.includes('—')&&document.documentElement.scrollWidth<=innerWidth;`);
+  assert.ok(checks.journeyMissing);
+  assert.equal(errors.length, 0, JSON.stringify(errors.slice(0, 2).map(error => error.exception?.description ?? error.text)));
   await writeFile(
     output + "/checks.json",
     JSON.stringify(checks, null, 2) + "\n",

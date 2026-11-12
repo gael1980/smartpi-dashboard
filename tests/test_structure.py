@@ -19,15 +19,23 @@ class IntegrationTests(unittest.TestCase):
         self.assertTrue(file.is_file(), "Compile frontend first: npm run build")
         self.assertGreater(file.stat().st_size, 1000)
 
-    def test_no_home_assistant_writes(self):
+    def test_home_assistant_capabilities_are_isolated(self):
         sources = "\n".join(p.read_text() for p in (ROOT / "frontend" / "src").rglob("*.ts"))
-        for forbidden in ("callService", "callApi", "fetch(", "XMLHttpRequest", "WebSocket(", "set_temperature(", "reset_smartpi_learning("):
+        for forbidden in ("callApi", "fetch(", "XMLHttpRequest", "WebSocket(", "set_temperature(", "reset_smartpi_learning("):
             self.assertNotIn(forbidden, sources)
         history = (ROOT / "frontend/src/services/history.ts").read_text()
         self.assertRegex(history, r"type:\s*[\"']history/history_during_period[\"']")
         self.assertEqual(sources.count("await hass.callWS<unknown>"), 1)
+        metadata = (ROOT / "frontend/src/services/observatory.ts").read_text()
+        self.assertIn('type: "smartpi_dashboard/observatory"', metadata)
         for source in (ROOT / "frontend/src").rglob("*.ts"):
-            if source.name != "history.ts":
+            if source.as_posix().endswith("services/climate.ts"):
+                self.assertEqual(source.read_text().count("await hass.callService("), 2)
+                self.assertIn('"climate", "set_temperature"', source.read_text())
+                self.assertIn('"climate", "set_preset_mode"', source.read_text())
+            else:
+                self.assertNotIn(".callService(", source.read_text())
+            if source.name not in ("history.ts", "observatory.ts"):
                 self.assertNotIn(".callWS(", source.read_text())
                 self.assertNotIn(".callWS<", source.read_text())
         backend = "\n".join(p.read_text() for p in COMPONENT.glob("*.py"))

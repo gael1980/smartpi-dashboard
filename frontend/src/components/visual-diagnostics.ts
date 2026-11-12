@@ -13,6 +13,7 @@ import { ControlPresentation } from "../utils/control";
 import "./time-chart";
 import "./control-diagram";
 import "./command-chain";
+import "./diagnostic-projection";
 import type { Curve, TimeChart } from "./time-chart";
 const temp: Curve[] = [
   {
@@ -439,7 +440,8 @@ export class VisualDiagnostics extends LitElement {
             </button>`,
         )}
       </nav>
-      ${liveView ? nothing : html`<div class="toolbar">
+      ${liveView ? html`<p class="foot">La période et la source ci-dessous concernent le graphe historique. Le schéma reste l’instantané actuel.</p>` : nothing}
+      <div class="toolbar">
         <div class="periods" role="group" aria-label="Plage temporelle">
           ${[1, 3, 6, 12, 24, 48].map(
             (h) =>
@@ -478,8 +480,8 @@ export class VisualDiagnostics extends LitElement {
             Actualiser Recorder
           </button>
         </div>
-      </div>`}
-      ${liveView ? nothing : html`<div class="source">
+      </div>
+      <div class="source">
         <strong
           >${fromRecorder
             ? "Recorder · historique persistant"
@@ -530,7 +532,7 @@ export class VisualDiagnostics extends LitElement {
         : nothing}
       ${supervision && this.livePublicationMissing
         ? html`<p class="notice" role="status">La publication du direct est introuvable dans la source et la fenêtre affichées. L’inspecteur affiche l’instantané actuel.</p>`
-        : nothing}`}
+        : nothing}
       ${this.tab === "evolution"
         ? html`<div class="supervision">
             ${this.inspectionPanel(d, selected, fromRecorder)}
@@ -553,6 +555,9 @@ export class VisualDiagnostics extends LitElement {
               intermédiaire.
             </p>
             ${this.trackingPanel(tracking, samples.length)}
+            <section class="chart"><smartpi-diagnostic-projection .samples=${samples} kind="scatter"
+              .source=${fromRecorder ? "Recorder" : "Session"} .contextId=${`${d.entityId}/${fromRecorder}/${this.range.join('/')}`}
+              .inspectable=${true} @inspect-publication=${(e: CustomEvent<number>) => this.inspect(e.detail)}></smartpi-diagnostic-projection></section>
             </div></div>`
         : this.tab === "regulation"
           ? html`<section class="pane">
@@ -566,7 +571,18 @@ export class VisualDiagnostics extends LitElement {
               <details class="pane chain-details">
                 <summary>Chaîne de commande détaillée</summary>
                 <smartpi-command-chain .diagnostic=${d}></smartpi-command-chain>
-              </details>`
+              </details>
+              <section class="pane command-comparison">
+                <p class="foot">${fromRecorder ? "Recorder" : "Session"} · ${new Date(this.range[0] * 1000).toLocaleString()} → ${new Date(this.range[1] * 1000).toLocaleString()}</p>
+                <smartpi-time-chart heading="Demande et sortie · écart de commande"
+                  .samples=${samples} .range=${this.range} .percent=${true} .commandComparison=${true} .syncKey=${d.entityId}
+                  .curves=${[power[1], power[0]]}
+                  @time-range=${(e: CustomEvent<[number, number]>) => {if (e.detail[1] > e.detail[0]) {this.followNow = false; this.range = e.detail;}}}></smartpi-time-chart>
+                <p class="foot">La zone relie la demande publiée et la sortie appliquée de la même publication.
+                  Ce n’est ni une énergie perdue ni un diagnostic de cause. Les motifs historiques
+                  ne sont disponibles que si cette source les a conservés. Les données manquantes et
+                  interruptions supérieures à 10 min coupent le tracé. Les courbes en escalier ne sont pas des mesures intermédiaires.</p>
+              </section>`
           : learning ? html`
               <section class="pane">
                 <div class="periods" role="group" aria-label="Repères d’apprentissage">
@@ -656,6 +672,9 @@ export class VisualDiagnostics extends LitElement {
                 Le contrat history ne contient pas de confiance historique ni de
                 mesures de référence A/B.
               </p>
+              <section class="pane"><smartpi-diagnostic-projection .samples=${samples} kind="model"
+                .source=${fromRecorder ? "Recorder" : "Session"} .contextId=${`${d.entityId}/${fromRecorder}/${this.range.join('/')}`}>
+              </smartpi-diagnostic-projection></section>
               <section class="pane">
                 <h3>Temps morts · instantané</h3>
                 <div class="metrics">
@@ -695,7 +714,7 @@ export class VisualDiagnostics extends LitElement {
                 <p>
                   Modèle fiable :
                   ${display(at(d.live, "analysis.twin.twin_model_reliable"))} ·
-                  Échauffement :
+                  Initialisation du Twin :
                   ${display(at(d.live, "analysis.twin.twin_warming_up"))}
                 </p>
                 <div class="metrics">
@@ -703,7 +722,7 @@ export class VisualDiagnostics extends LitElement {
                     ["Température estimée", "twin_T_hat", " °C"],
                     ["Température prédite", "twin_T_pred", " °C"],
                     ["Innovation", "twin_innovation", " °C"],
-                    ["RMSE 30", "twin_rmse_30", " °C"],
+                    ["RMSE innovation · EMA", "twin_rmse_30", " °C"],
                     [
                       "Perturbation estimée",
                       "twin_perturbation_dTdt",

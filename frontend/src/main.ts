@@ -3,6 +3,12 @@ import {customElement, property, state} from "lit/decorators.js";
 import {discover, reliableValue, display, at, num, inBootstrap, explanations, type HassLike, type SmartPIDiagnostic} from "./adapter";
 
 import "./components/visual-diagnostics";
+import "./components/thermal-journey";
+import type {ClimateConnection} from "./services/climate";
+import type {ObservatoryConnection} from "./services/observatory";
+import "./components/observatory";
+import type {ObservatoryElement} from "./components/observatory";
+import type {ThermalJourneyElement} from "./components/thermal-journey";
 import {SessionHistory, timestamp} from "./utils/timeseries";
 import type {HistoryConnection} from "./services/history";
 
@@ -90,7 +96,7 @@ const sections: Section[] = [
     {label:"Température estimée",path:"analysis.twin.twin_T_hat",unit:" °C"},
     {label:"Température prédite",path:"analysis.twin.twin_T_pred",unit:" °C"},
     {label:"Innovation",path:"analysis.twin.twin_innovation",unit:" °C",digits:4},
-    {label:"RMSE 30",path:"analysis.twin.twin_rmse_30",unit:" °C",digits:4},
+    {label:"RMSE de l’innovation · EMA",path:"analysis.twin.twin_rmse_30",unit:" °C",digits:4},
     {label:"Équilibre estimé",path:"analysis.twin.twin_T_steady",unit:" °C",reliable:"analysis.twin.twin_T_steady_reliable"},
     {label:"Fiabilité équilibre",path:"analysis.twin.twin_T_steady_reliable"},
     {label:"Consigne atteignable (prédiction)",path:"analysis.twin.twin_setpoint_reachable",reliable:"analysis.twin.twin_T_steady_reliable"},
@@ -113,7 +119,7 @@ const sections: Section[] = [
 
 @customElement("smartpi-dashboard-panel")
 export class SmartPIDashboardPanel extends LitElement {
-  @property({attribute:false}) hass?: HassLike & Partial<HistoryConnection>;
+  @property({attribute:false}) hass?: HassLike & Partial<HistoryConnection> & Partial<ClimateConnection> & Partial<ObservatoryConnection>;
   @property({attribute:false}) panel?: unknown;
   @property({type:Boolean}) narrow = false;
   @state() private selectedId = "";
@@ -156,9 +162,9 @@ export class SmartPIDashboardPanel extends LitElement {
           <span class="tag">${bootstrap?"Apprentissage / hystérésis":display(at(v,"control.phase"))}</span>
         </div>
         <p class="muted small">Dernière publication ${publication === null ? "indisponible" : html`<time datetime=${d.lastUpdated ?? ""}>${publicationFormat.format(publication * 1000)}</time>`}</p>
+        <smartpi-thermal-journey .hass=${this.hass} .diagnostic=${d}
+          @observatory-refresh=${(event: CustomEvent<{entityId: string}>) => {if (event.detail.entityId === d.entityId) void this.renderRoot.querySelector<ObservatoryElement>("smartpi-observatory")?.refresh();}}></smartpi-thermal-journey>
         <div class="metrics">
-          ${this.metric("Température intérieure",at(v,"temperature.indoor")," °C")}
-          ${this.metric("Consigne filtrée",at(v,"setpoint.filtered_setpoint")," °C")}
           ${this.metric("Commande appliquée",at(v,"power.applied_percent")," %",1)}
           ${this.metric("Température extérieure",at(v,"temperature.outdoor")," °C")}
         </div>
@@ -216,6 +222,12 @@ export class SmartPIDashboardPanel extends LitElement {
             observation exploitable acceptée par SmartPI.</p>
         </section>
       </section>
+      <smartpi-observatory .hass=${this.hass} .diagnostic=${d}
+        @prepare-temperature=${(event: CustomEvent<{entityId: string; value: number}>) => {
+          if (event.detail.entityId !== d.entityId) return;
+          const journey = this.renderRoot.querySelector<ThermalJourneyElement>("smartpi-thermal-journey");
+          if (journey) void journey.previewTemperature(event.detail.value).then(prepared => {if (prepared) journey.scrollIntoView({block: "center"});});
+        }}></smartpi-observatory>
       <smartpi-visual-diagnostics .hass=${this.hass} .diagnostic=${d} .session=${this.sessionHistory.get(d.entityId)}></smartpi-visual-diagnostics>
       <details class="surface technical"><summary>Diagnostics techniques complets</summary>
       <section><h3>Comprendre la situation</h3><ul>${notes.map(s=>html`<li>${s}</li>`)}</ul></section>
@@ -239,7 +251,7 @@ export class SmartPIDashboardPanel extends LitElement {
     const selected=list.find(d=>d.entityId===this.selectedId)??list[0];
     return html`<div class="header"><ha-menu-button .hass=${this.hass} .narrow=${this.narrow}></ha-menu-button>
        <div class="head-text"><h1>SmartPI Dashboard</h1><span>Comprendre la régulation thermique</span></div>
-       <span class="tag readonly">Lecture seule</span></div>
+       <span class="tag readonly">Température & supervision</span></div>
       <main>
         <div class="flex spread intro"><h2>Mes thermostats</h2>
           <span class="muted small">${list.length} diagnostic${list.length>1?"s":""} SmartPI v2</span></div>
@@ -252,7 +264,7 @@ export class SmartPIDashboardPanel extends LitElement {
             <span class="tile-bottom">Consigne filtrée ${display(at(d.live,"setpoint.filtered_setpoint")," °C")}</span>
           </button>`)}</div>
           ${selected?this.showDiagnostic(selected):nothing}`}
-        <footer>Source : capteurs SmartPI Diagnostics v2 · Lecture seule · Aucune commande Home Assistant</footer>
+        <footer>Source : capteurs SmartPI Diagnostics v2 · Réglage de température et de preset sur sélection explicite</footer>
       </main>`;
   }
 
@@ -277,7 +289,7 @@ export class SmartPIDashboardPanel extends LitElement {
     .big{font-size:24px;font-weight:700;font-variant-numeric:tabular-nums}.tile-bottom{font-size:12px;margin-top:auto;color:var(--secondary-text-color)}
     .hero,.surface{background:var(--card-background-color);border:1px solid var(--divider-color);border-radius:14px}
     .hero{padding:20px;border-inline-start:3px solid var(--primary-color)}.hero h2{margin:4px 0;font-size:25px;overflow-wrap:anywhere}
-    .metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:11px;margin-top:14px}
+    .metrics{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:11px;margin-top:14px}
     .metric{background:var(--secondary-background-color,var(--primary-background-color));border-radius:10px;
       padding:14px;display:flex;flex-direction:column;gap:8px;min-width:0}
     .metric span{font-size:12px;color:var(--secondary-text-color)}.metric strong{font-size:21px;overflow-wrap:anywhere}

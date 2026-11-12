@@ -1,6 +1,36 @@
 # Règles SmartPI Dashboard
-Projet de supervision **strictement en lecture seule**.
-Ne jamais appeler `hass.callService`, modifier les entités, déclencher une calibration ou enregistrer des réglages.
+
+## Organisation et Git
+
+- `VTH/` est le workspace commun : lire `VTH/AGENTS.md` et
+  `VTH/PROJECT_MEMORY.md` en début de session, puis vérifier les fichiers réels.
+  Les anciens chemins dans les entrées historiques de la mémoire ne décrivent
+  pas nécessairement l'organisation actuelle.
+- Le projet Codex actif et la racine du dépôt sont
+  `VTH/Projet-SmartPI-Dashboard/smartpi-dashboard-clean/`. Il contient notamment
+  `frontend/`, `custom_components/` et `tests/`. Son remote `origin` est
+  `https://github.com/gael1980/smartpi-dashboard.git` ; la branche principale
+  est `main`. Vérifier branche, suivi et remote avant de travailler : leur état
+  peut évoluer.
+- `VTH/Projet-SmartPI-Dashboard/smartpi-dashboard/` est une autre copie du même
+  dépôt, avec ses propres modifications locales. Ne pas confondre les copies ni
+  écraser ou déplacer leurs changements. L'application autonome
+  `VTH/Projet-SmartPI-Dash/smartpi-dash/` est un projet distinct.
+- Avant toute modification, vérifier la racine Git, le statut, la branche et le
+  suivi ; préserver les changements locaux. Avant commit ou push demandé,
+  examiner le diff et les fichiers concernés, et présenter un résumé précis.
+  Ne pas effectuer de reset destructif, de push forcé ou de nettoyage automatique.
+
+## Supervision et schéma
+
+Projet de supervision, avec l’exception de sélection explicitement demandée le
+11 novembre 2026 : le trajet thermique peut appeler `climate.set_temperature`
+ou `climate.set_preset_mode` uniquement après le clic utilisateur sur Appliquer,
+via `services/climate.ts`, sur le seul thermostat explicitement et uniquement
+lié au diagnostic. Revalider disponibilité, capacités, verrouillage, bornes,
+pas et contexte. Le chargement et les aperçus ne commandent aucun thermostat. Tous les
+diagnostics restent en lecture seule ; aucune autre commande, calibration,
+modification de coefficient ou sauvegarde de réglages SmartPI. Aucun planning.
 SmartPI Diagnostics v2 est la source de vérité : `attributes.live` pour les valeurs actuelles, `attributes.history` pour les séries Recorder.
 Ne pas confondre pourcentage de commande et puissance réellement mesurée.
 Ne jamais interpréter `tau_min` quand `tau_reliable` est faux, ni une prédiction d'équilibre lorsque sa fiabilité est fausse.
@@ -11,9 +41,15 @@ Source du schéma : https://github.com/KipK/vtherm_smartpi/blob/master/custom_co
 
 ## Historique et fidélité du schéma (0.2)
 
-- Seule capacité réseau frontend : `services/history.ts`, commande officielle
+- Lecture réseau frontend : `services/history.ts`, commande officielle
   `history/history_during_period` via la session authentifiée `hass.callWS`.
-  Aucun service, token externe, écriture ou abonnement supplémentaire.
+  Les deux seules écritures autorisées sont isolées dans `services/climate.ts`
+  selon l’exception ci-dessus. L’exception d’observatoire personnel demandée le
+  11 novembre 2026 autorise `services/observatory.ts` à appeler uniquement
+  `smartpi_dashboard/observatory` pour les métadonnées locales. Son API est admin
+  et sa liste d’actions fermée. Le backend observe les états publiés et conserve
+  un Store HA natif borné ; aucun appel de service ni état de régulation écrit.
+  Aucun token externe, autre service ou abonnement frontend supplémentaire.
 - Toujours lire les sources SmartPI actuelles avant de modifier une relation du
   schéma ; mettre à jour la matrice de `VISUAL_DIAGNOSTICS.md` et les tests.
   Vérifier notamment erreur P filtrée / erreur I brute, FF runtime sans FF3 en
@@ -68,10 +104,12 @@ ou d'accessibilité à partir de la seule utilisation d'une skill.
   conditionnée à des contrôles réussis.
 - Un déploiement SSH est autorisé seulement sur demande explicite. Utiliser la
   cible validée et une clé d’hôte connue, sauvegarder le composant installé,
-  vérifier les sommes du paquet préparé depuis le commit publié, puis vérifier
+  vérifier les sommes du paquet préparé depuis le commit publié (ou du bundle
+  local reproductible si une installation sans push est explicitement demandée), puis vérifier
   la version servie et le chargement du panneau. En cas d’échec, conserver une
   voie de restauration. Limiter les écritures à `custom_components/smartpi_dashboard/`
-  et à sa sauvegarde ; recharger ou redémarrer uniquement si nécessaire pour
+  et à sa sauvegarde ; l’observatoire peut conserver son seul Store natif
+  `.storage/smartpi_dashboard.observatory`. Recharger ou redémarrer uniquement si nécessaire pour
   l’installation autorisée. Aucune action de régulation n’en découle.
 - Conserver les coordonnées de l’instance et les preuves privées dans le
   workspace local, jamais dans le dépôt. Ne pas conserver de secrets.

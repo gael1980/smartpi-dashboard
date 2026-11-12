@@ -12,7 +12,7 @@ export interface HistoryConnection {
     no_attributes: boolean;
   }): Promise<T>;
 }
-/** The sole network capability: official authenticated history read, one entity, bounded 48 h. */
+/** Official authenticated history read, one entity, bounded 48 h; no write capability. */
 export async function readHistory(
   hass: HistoryConnection,
   entityId: string,

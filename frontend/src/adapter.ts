@@ -1,4 +1,4 @@
-/** Strict, read-only adapter for the published SmartPI Diagnostics v2 schema. */
+/** Strict read-only data adapter; explicit climate actions live in services/climate.ts. */
 export type Rec = Record<string, unknown>;
 export interface HAState {
   entity_id: string;

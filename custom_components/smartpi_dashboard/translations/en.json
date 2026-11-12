@@ -1,0 +1,14 @@
+{
+  "title": "SmartPI Dashboard",
+  "config": {
+    "step": {
+      "user": {
+        "title": "SmartPI Dashboard",
+        "description": "Set up the SmartPI dashboard with diagnostics and explicit temperature and preset selection?"
+      }
+    },
+    "abort": {
+      "single_instance_allowed": "SmartPI Dashboard is already configured."
+    }
+  }
+}

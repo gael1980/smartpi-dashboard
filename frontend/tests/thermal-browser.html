@@ -1,0 +1,41 @@
+<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Trajet thermique — données synthétiques</title>
+<style>
+  :root{--primary-background-color:#f3f5f5;--secondary-background-color:#f3f5f5;--card-background-color:#fff;--primary-text-color:#192b31;--secondary-text-color:#526268;--divider-color:#d2dbdd;--primary-color:#167883;--app-header-background-color:#fff;font-family:Arial,sans-serif}body{margin:0}
+  @media(prefers-color-scheme:dark){:root{--primary-background-color:#111c21;--secondary-background-color:#18282e;--card-background-color:#1c2d34;--primary-text-color:#e3edef;--secondary-text-color:#afc3c9;--divider-color:#496169;--primary-color:#6dcbd2;--app-header-background-color:#1c2d34}}
+</style>
+<script type="module">
+import '/custom_components/smartpi_dashboard/frontend/smartpi-dashboard.js';
+const panel=document.createElement('smartpi-dashboard-panel');document.body.append(panel);
+const date=()=>new Date().toISOString();
+const sensor={entity_id:'sensor.demo_smartpi',state:'stable',last_updated:date(),attributes:{friendly_name:'Salon SmartPI Diagnostics',schema_version:2,history:{},live:{
+ temperature:{indoor:19.2,outdoor:8},setpoint:{filtered_setpoint:19.7},control:{mode:'smartpi',phase:'Stable'},model:{tau_reliable:true,confidence:'ab_reliable'},
+ analysis:{twin:{twin_status:'ok',twin_model_reliable:true,twin_warming_up:false,eta_s:2100,eta_reason:'ok'}},learning:{stage:'monitoring'},power:{applied_percent:42}
+}}};
+const climate={entity_id:'climate.demo_salon',state:'heat',last_updated:date(),attributes:{friendly_name:'Salon',temperature:20,min_temp:7,max_temp:30,target_temp_step:.5,supported_features:17,preset_mode:'comfort',preset_modes:['frost','eco','comfort','boost','activity','none'],
+ specific_states:{regulation_diagnostics:sensor.entity_id,is_locked:false},configuration:{temperature_unit:'°C'},hvac_action:'heating',preset_temperatures:{frost_temp:7,eco_temp:17,comfort_temp:20,boost_temp:21}
+}};
+sensor.last_updated=climate.last_updated;
+const calls=[];
+let reject=false,pending;
+let metadataReject=false,metadataPending;
+const books={};let sequence=0;const metadata=[];
+const getBook=id=>books[id]??=( {current:null,bookmarks:[],receipts:[],trials:[],forecasts:[]} );
+const hass={states:{[sensor.entity_id]:sensor,[climate.entity_id]:climate},callWS:async msg=>{
+ if(msg.type!=='smartpi_dashboard/observatory')return[];
+ metadata.push(msg);if(metadataReject)throw Error('Stockage local refusé.');
+ const book=getBook(msg.entity_id),p=msg.payload??{},now=Date.now()/1000,id=()=>String(++sequence);
+ if(msg.action==='receipt_begin'){const r={id:id(),started_at:now,status:'pending',choice:p.choice,unit:'°C',service_result:'pending',confirmed_at:null};book.receipts.push(r);return{id:r.id}}
+ if(msg.action==='receipt_finish'){const r=book.receipts.find(r=>r.id===p.id);if(r)r.service_result=p.success?'accepted':'uncertain';return{id:p.id}}
+ if(msg.action==='bookmark_save')book.bookmarks.push({id:id(),label:p.label,created_at:now,temperature:sensor.attributes.live.temperature.indoor,target:climate.attributes.temperature,preset:climate.attributes.preset_mode,outdoor:8,unit:'°C'});
+ if(msg.action==='trial_start')book.trials.push({id:id(),label:p.label,started_at:now,status:'pending',target:climate.attributes.temperature,unit:'°C',baseline:19.2,outdoor:8,feedback:'unknown',missing_publications:0,summary:{publications:0,first_at:null,last_at:null,minimum:null,maximum:null,last:null,max_abs_error:null,outdoor_min:null,outdoor_max:null}});
+ if(msg.action==='trial_stop'){const t=book.trials.find(t=>t.id===p.id);t.status='finished';t.ended_at=now;t.reason='Arrêt demandé par l’utilisateur'}
+ if(msg.action==='trial_feedback'){book.trials.find(t=>t.id===p.id).feedback=p.feedback}
+ for(const group of ['bookmarks','trials','forecasts','receipts'])if(msg.action===group.slice(0,-1)+'_delete')book[group]=book[group].filter(x=>x.id!==p.id);
+ if(msg.action==='clear')for(const group of ['bookmarks','trials','forecasts','receipts'])book[group]=[];
+ const result=structuredClone(book);if(msg.action==='get'&&metadataPending)await metadataPending;return result;
+},callService:async(...args)=>{calls.push(args);if(reject)throw Error('Commande refusée : droits insuffisants.');if(pending)await pending;}};
+function publish(){panel.hass={...hass,states:{...hass.states}};}
+publish();
+window.thermalFixture={panel,hass,sensor,climate,calls,publish,metadata,getBook,setMetadataReject(value){metadataReject=value},setMetadataPending(value){metadataPending=value},setReject(value){reject=value},setPending(value){pending=value}};
+</script>

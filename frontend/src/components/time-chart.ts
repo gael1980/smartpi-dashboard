@@ -3,6 +3,7 @@ import { customElement, property } from "lit/decorators.js";
 import uPlot from "uplot";
 import plotCSS from "uplot/dist/uPlot.min.css";
 import { valueAt, type LearningMark, type Sample } from "../utils/timeseries";
+import {commandPair, DiagnosticProjection} from "../utils/diagnostic-projection";
 export interface Curve {
   label: string;
   path: string;
@@ -23,6 +24,7 @@ export class TimeChart extends LitElement {
   @property({ attribute: false }) selectedTime: number | null = null;
   @property({ attribute: false }) marks: LearningMark[] = [];
   @property({ type: Boolean }) thermalPhases = false;
+  @property({ type: Boolean }) commandComparison = false;
   private lastSamples?: Sample[];
   private lastSignature = "";
   private plot?: uPlot;
@@ -55,6 +57,7 @@ export class TimeChart extends LitElement {
       this.syncKey,
       this.percent,
       this.thermalPhases,
+      this.commandComparison,
       this.range,
     ]);
     if (this.lastSamples === this.samples && this.lastSignature === signature) {
@@ -177,7 +180,7 @@ export class TimeChart extends LitElement {
     if (
       !this.samples.length ||
       !this.samples.some((s) =>
-        this.curves.some((c) => valueAt(s, c.path) !== null),
+        this.curves.some((c) => this.seriesValue(s, c) !== null),
       )
     )
       return;
@@ -185,7 +188,7 @@ export class TimeChart extends LitElement {
       text = style.getPropertyValue("--primary-text-color").trim() || "#555";
     const data: uPlot.AlignedData = [
       this.samples.map((s) => s.time),
-      ...this.curves.map((c) => this.samples.map((s) => valueAt(s, c.path))),
+      ...this.curves.map((c) => this.samples.map((s) => this.seriesValue(s, c))),
     ];
     this.applying = true;
     this.plot = new uPlot(
@@ -204,6 +207,10 @@ export class TimeChart extends LitElement {
             : {},
         },
         cursor: { sync: { key: this.syncKey }, drag: { x: true, y: false } },
+        bands: this.commandComparison ? [
+          {series: [1, 2], fill: "rgba(180,105,30,.22)"},
+          {series: [2, 1], fill: "rgba(30,120,155,.22)"},
+        ] : [],
         axes: [
           {
             stroke: text,
@@ -246,6 +253,22 @@ export class TimeChart extends LitElement {
             width: 2,
             dash: c.dash,
             spanGaps: false,
+            gaps: (u: uPlot, _series: number, start: number, end: number, gaps: uPlot.Series.Gaps) => {
+              if (!this.commandComparison) return gaps;
+              const extra: uPlot.Series.Gaps = [...gaps];
+              for (let i = start + 1; i <= end; i++) {
+                if (this.samples[i].time - this.samples[i - 1].time > DiagnosticProjection.GAP_SECONDS) {
+                  extra.push([Math.round(u.valToPos(this.samples[i - 1].time, "x", true)), Math.round(u.valToPos(this.samples[i].time, "x", true))]);
+                }
+              }
+              const merged: uPlot.Series.Gaps = [];
+              for (const gap of extra.sort((a, b) => a[0] - b[0])) {
+                const previous = merged.at(-1);
+                if (previous && gap[0] <= previous[1]) previous[1] = Math.max(previous[1], gap[1]);
+                else merged.push([...gap]);
+              }
+              return merged;
+            },
             show: !this.hiddenCurves.has(c.label),
             paths: c.step ? uPlot.paths.stepped!({ align: 1 }) : undefined,
             points: { show: this.samples.length < 3 },
@@ -325,9 +348,14 @@ export class TimeChart extends LitElement {
     });
     this.observer.observe(target);
   }
+  private seriesValue(sample: Sample, curve: Curve) {
+    if (!this.commandComparison) return valueAt(sample, curve.path);
+    const pair = commandPair(sample);
+    return pair === null ? null : curve.path === "power.command_percent" ? pair[0] : curve.path === "power.applied_percent" ? pair[1] : null;
+  }
   render() {
     const count = this.samples.filter((s) =>
-      this.curves.some((c) => valueAt(s, c.path) !== null),
+      this.curves.some((c) => this.seriesValue(s, c) !== null),
     ).length;
     return html`<h3>${this.heading}</h3>
       <div class="series-controls" role="group" aria-label="Séries affichées">
@@ -381,7 +409,7 @@ export class TimeChart extends LitElement {
                         ${this.curves.map(
                           (c) =>
                             html`<td>
-                              ${valueAt(s, c.path) ?? "Indisponible"}
+                              ${this.seriesValue(s, c) ?? "Indisponible"}
                             </td>`,
                         )}
                       </tr>`,

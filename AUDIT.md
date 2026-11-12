@@ -123,3 +123,155 @@ Tester copie, démarrage, ajout, navigation, rechargement et suppression dans un
 instance de développement ; vérifier ensuite les huit séries via une API
 historique autorisée avant toute évolution graphique. Ne pas modifier SmartPI
 pour rendre ses diagnostics artificiellement plausibles.
+
+## 11 novembre 2026 — trajet thermique 0.2.8, essai local sans publication
+
+À la demande explicite de l’utilisateur, le panneau ajoute la sélection de
+consigne et de preset. Les assertions historiques de lecture seule ci-dessus
+décrivent les versions précédentes. Désormais, seuls deux services climate
+sont permis dans `services/climate.ts`, après validation explicite du choix ;
+les diagnostics et historiques restent en lecture seule.
+
+- TypeScript : réussi ; 40 tests Node réussis.
+- Python 3.14.10 / Home Assistant 2026.11.0, environnement isolé uv : 6 tests
+  réussis, dont les 3 cycles de vie ; aucun skip.
+- Build reproductible ; bundle local préparé et contrôlé par SHA-256.
+- Suite Chrome intégrale sur fixtures synthétiques : navigation, historique,
+  clavier, focus, refus, obsolescence, envois différés et absence d’ETA invalide.
+- Rendu du trajet vérifié à 1440×1000, 390×844, 320×800, clair et sombre.
+- Aucune commande de thermostat réel pendant les validations. Pas de push ni
+  de CI distante pour cette version locale.
+- Revue académique de portée et journal conservés dans le workspace privé,
+  dossier `artifacts/thermal_journey_2026-11-11/` ; aucune certification physique
+  ou d’accessibilité revendiquée.
+
+Limites : ETA meilleur cas, sans validation prospective sur l’installation ;
+les anciennes vues historiques supposent encore une installation en °C.
+
+## 11 novembre 2026 — observatoire personnel 0.3.0, essai local
+
+- Six usages : reçu de commande, priorités publiées, conseil avant validation,
+  souvenirs personnels, essais descriptifs et carnet prospectif du Twin.
+- Deux services climate explicites inchangés. L’API admin de métadonnées n’appelle
+  aucun service, ne modifie aucune entité et ne crée pas de réglage SmartPI.
+  La collecte des états publiés continue panneau fermé, avec Store HA natif borné.
+- Typage réussi ; 49 tests Node et 36 tests Python réussis, aucun skip, avec les
+  vraies API HA 2026.11.0 dans un environnement isolé Python 3.14.
+  Couverture du Store, des droits admin, des suppressions de source, des changements
+  de contexte, des interruptions et de la conservation des statistiques cumulées.
+- Suite Chrome sur fixtures synthétiques réussie : quatre vues à 1440/390/320 px,
+  clavier, aperçus, application explicite, reçus, souvenirs, essais/comparaison,
+  prévisions/exclusions, refus de métadonnées et suppression avec confirmation.
+  Les opérations de métadonnées n’ajoutent aucun appel climate.
+- Bundle reproductible sur deux builds, 209 024 octets, SHA-256
+  `88cb18e625e037a52535f4f53e6f35eed5230c1da85e236c7d5efbef022b443d`.
+- Relecture ECC étendue aux observations prospectives. Sources, méthodes,
+  couverture, exclusions et limites dans VISUAL_DIAGNOSTICS.md. Aucun score de
+  prédiction ou d’économie, aucune causalité ni efficacité humaine démontrée.
+  Les vues nouvelles emploient l’unité native ; les anciens graphiques °C ne
+  constituent pas une compatibilité °F complète.
+- Aucun commit/push ni CI distante. Preuves synthétiques et rapport de portée
+  conservés hors dépôt dans le workspace privé ; installation documentée séparément.
+
+### Installation locale demandée, après validation
+
+Paquet local 0.3.0 installé sans publication, composant précédent sauvegardé,
+empreintes vérifiées avant/après copie et `ha core check` réussi. Redémarrage
+Core 2026.11.1 terminé ; entrée confirmée `loaded` via MCP officiel. Panneau et
+bundle HTTP 200 ; bundle servi identique au SHA-256 ci-dessus ; Store natif créé.
+Les interactions navigateur ont été vérifiées sur fixtures, pas sur les commandes
+du thermostat réel. Les coordonnées, sauvegarde et preuves restent hors dépôt.
+
+## 11 novembre 2026 — durcissement ECC 0.3.1
+
+Revue ciblée avec `ecc:security-review` et `ecc:verification-loop` : frontières
+HA/session, API admin, entrées, stockage local, concurrence, rendu de textes,
+commandes explicites et dépendances verrouillées. Aucun service thermostat ajouté.
+
+Défauts reproduits avant correction : une erreur disque pouvait être journalisée
+par Store sans invalider la confirmation de sauvegarde ; fichier 0644 ; requête
+sur observateur arrêté encore acceptée ; champs inattendus acceptés dans certaines
+mutations. Les tests de refus échouaient avant correction, puis passent.
+
+Corrections : fichier 0600, écritures atomiques, identifiant de sauvegarde vérifié
+par relecture indépendante, validation des requêtes/carnets/réponses imbriquées,
+verrou des requêtes et arrêt coordonné, débit API borné, choix climate copié et
+revalidé, délai d’écriture explicitement incertain et reprise après reconnexion.
+Les observations arrivant pendant une sauvegarde sont conservées en mémoire.
+
+Validation locale : TypeScript et build réussis, 55 tests Node et 46 tests Python
+réussis avec HA 2026.11.0, aucun skip. Suite Chrome sur données synthétiques réussie,
+y compris texte HTML échappé, réponse mal formée et reconnexion pendant sauvegarde.
+Ruff E9/F et diff --check réussis ; aucun secret ni HTML utilisateur interprété
+trouvé dans les sources examinées. Audit npm : 0 vulnérabilité connue signalée
+à la date du contrôle. Aucun correctif de dépendance automatique.
+
+Bundle reproductible : 211 113 octets, SHA-256
+`aabfd13a5011f3b16e65be786efb14f6e7f18d5c814fa73908b79d29b2f4c018`.
+Les preuves restent dans le workspace privé. Ces contrôles ciblés ne constituent
+pas un test d’intrusion exhaustif ni une garantie d’absence de vulnérabilité.
+Aucun commit, push ou exécution CI distante.
+
+Le contrôle sur cible a aussi révélé que le flux fréquent pouvait reporter sans
+cesse l’écriture différée. Défaut reproduit puis corrigé : une seule sauvegarde
+reste programmée jusqu’à consommation de l’instantané par HA. La suite complète
+passe après cette correction, intégrée au paquet final 0.3.1.
+
+Installation locale finale vérifiée : contrôle de configuration réussi,
+redémarrage Core 2026.11.1 terminé, entrée `loaded` via MCP officiel, panneau et
+bundle HTTP 200 avec empreinte identique. Fichier du carnet en 0600 constaté
+sur cible, sans lecture de son contenu privé. Les sauvegardes de retour arrière
+et les coordonnées de l’instance restent hors dépôt.
+
+Une nouvelle écriture du carnet en arrière-plan a été observée sur cible par
+son changement de date, toujours en 0600 et sans lecture des données.
+
+
+## 12 novembre 2026 — nouvelles visualisations 0.3.2
+
+Bande de commande proportionnelle au pourcentage appliqué au-dessus de la règle,
+avec chevron de retour visé indépendant, zéro conservé et fraîcheur contrôlée.
+Les aperçus ne changent pas la référence active ; l’ETA conserve ses gardes.
+Trois graphes historiques : nuage écart filtré/commande en Supervision, demande
+et sortie avec zone entre courbes dans Régulation, parcours A/B en Santé du modèle.
+Sources séparées, couples de même publication, lacunes explicites et aucune
+confiance actuelle appliquée au passé. Vues XY bornées à 600 points, réduction
+annoncée, dates, sélection clavier et tables paginées. Le nuage ouvre l’inspection.
+
+Relecture ciblée ECC scientifique, frontend, accessibilité et verification-loop.
+La matrice de VISUAL_DIAGNOSTICS.md précise champs, référence SmartPI et limites.
+Ces graphes ne mesurent ni énergie, causalité ni qualité du modèle. La convention
+°C historique demeure ; la règle conserve son support des unités natives.
+
+Validation locale : TypeScript, build, 66 tests Node et 46 tests Python avec
+HA 2026.11.0, zéro échec/skip ; Ruff E9/F et diff --check réussis. Chrome isolé
+sur fixtures : anciens scénarios conservés, proportions, dépassement/commande
+positive ou nulle, mode cool, absences/péremption, séparation live/historique,
+sélection clavier du nuage, lacunes A/B et demande/sortie, remplissage confirmé
+dans les deux sens, libération des ResizeObserver/uPlot. Rendu revu en clair et
+sombre à 1440, 390 et 320 px ; preuve structurée vérifiée. Audit ciblé, sans
+certification WCAG ni essai lecteur d’écran exhaustif.
+
+Bundle reproductible sur deux builds : 228 879 octets, SHA-256
+`26ce8610d4ff4ecfc195b465eafa402b44f5e005f6e8373501f694796ed541b7`.
+Aucun appel réseau ou service ajouté par ces vues. Aucun commit/push ni CI distante.
+Le dossier `.codegraph/` est ignoré et reste hors index. Rapports et captures
+synthétiques sont conservés dans le workspace privé.
+
+Installation locale 0.3.2 autorisée et vérifiée : composant précédent sauvegardé,
+15 fichiers du paquet contrôlés avant/après copie et après redémarrage. Contrôle
+de configuration réussi ; Core 2026.11.1 redémarré, entrée `loaded` via MCP officiel.
+Panneau et bundle HTTP 200, empreinte servie identique. Les commandes du thermostat
+réel n’ont pas été exercées ; le carnet privé n’a pas été lu ou modifié par SSH.
+Sauvegarde et preuves de restauration conservées dans le workspace privé.
+
+
+## Publication des sources 0.3.2 — 12 novembre 2026
+
+Sur demande explicite, les sources, le bundle testé, les tests, le changelog
+reconstitué et la préparation Marketplace sont réunis pour publication sur main.
+Les 66 tests Node, 46 tests Python, typage/build, navigateur sur fixtures et
+installation locale ci-dessus portent sur le même bundle. Les modifications
+suivantes sont documentaires. `.codegraph/`, notes de reprise et preuves privées
+sont exclus du commit. Aucun tag ou release n’est créé. Les résultats de la CI
+sur ce commit restent à vérifier après le push ; ils ne sont pas présumés réussis.

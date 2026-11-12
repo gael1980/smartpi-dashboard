@@ -1,4 +1,4 @@
-"""Register the read-only Home Assistant sidebar panel."""
+"""Register the SmartPI Home Assistant sidebar panel."""
 
 from pathlib import Path
 from homeassistant.components import frontend, panel_custom

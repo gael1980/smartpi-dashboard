@@ -158,6 +158,7 @@
     callService: forbid,
     callApi: forbid,
     callWS: async (msg) => {
+      if (msg.type === "smartpi_dashboard/observatory") return {current:null,bookmarks:[],receipts:[],trials:[],forecasts:[]};
       if (msg.type !== "history/history_during_period") return forbid();
       reads++;
       window.readMessages.push(msg);

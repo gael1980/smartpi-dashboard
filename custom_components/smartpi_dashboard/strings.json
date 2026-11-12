@@ -4,7 +4,7 @@
     "step": {
       "user": {
         "title": "SmartPI Dashboard",
-        "description": "Installer le tableau de bord SmartPI en lecture seule ?"
+        "description": "Installer le tableau de bord SmartPI avec supervision et sélection de température et de preset ?"
       }
     },
     "abort": {
