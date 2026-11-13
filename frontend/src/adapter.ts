@@ -5,6 +5,7 @@ export interface HAState {
   state: string;
   attributes: Rec;
   last_updated?: string;
+  last_changed?: string;
 }
 export interface HassLike { states: Record<string, HAState>; language?: string }
 export interface SmartPIDiagnostic {

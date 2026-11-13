@@ -30,7 +30,7 @@ Ces captures utilisent uniquement des données de démonstration synthétiques.
 
 ## État du développement
 
-**Version de travail 0.3.2** — panneau natif avec graphiques température/consigne, commandes,
+**Version de travail 0.3.3** — panneau natif avec graphiques température/consigne, commandes,
 écart filtré et modèle A/B sur 1–48 h. Zoom, déplacement, curseurs synchronisés,
 légende interactive, tables accessibles, schéma logique cliquable et chaîne U.
 Le trajet thermique réunit température mesurée, consigne brute du thermostat et presets publiés.
@@ -123,7 +123,7 @@ au code SmartPI, l'architecture et les limites scientifiques.
 
 [![Configurer SmartPI Dashboard](https://my.home-assistant.io/badges/config_flow_start.svg)](https://my.home-assistant.io/redirect/config_flow_start/?domain=smartpi_dashboard)
 
-Les sources 0.3.2 sont publiées sur `main`, sans tag ni release GitHub créée par
+Les sources 0.3.3 sont publiées sur `main`, sans tag ni release GitHub créée par
 ce push. Le lien Marketplace permet d’ajouter le dépôt personnalisé ; le projet
 n’est pas encore dans le catalogue par défaut. Consulter les contrôles GitHub
 Actions avant installation et le [bilan de diffusion](docs/MARKETPLACE.md).

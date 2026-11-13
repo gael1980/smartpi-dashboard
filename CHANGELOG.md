@@ -9,6 +9,14 @@ L’étape 0.2.6 est attestée par les notes locales, mais n’a pas de commit o
 propre dans ce dépôt. Aucun tag ni release GitHub n’est créé par ce push.
 Seules les étapes dont une trace est conservée sont décrites.
 
+## 0.3.3 — 2026-11-13 — Fiabilité de la flèche de commande
+
+- Une mise à jour des attributs du thermostat ne masque plus à tort une commande
+  récente : la cohérence du mode utilise `last_changed`, avec repli prudent.
+- L’écart reste descriptif entre la mesure récente et la consigne active.
+- Péremption, valeurs invalides et changements de mode restent protégés ; gardes ETA inchangées.
+- Tests de non-régression unitaires et navigateur sur données synthétiques.
+
 ## 0.3.2 — 2026-11-12 — Nouvelles lectures visuelles
 
 - Flèche au-dessus de la règle, de longueur proportionnelle au pourcentage appliqué.

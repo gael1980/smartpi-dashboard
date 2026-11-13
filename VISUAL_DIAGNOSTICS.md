@@ -53,7 +53,13 @@ référence : elle reste la consigne active, distincte de la consigne filtrée.
 
 Les deux indications demandent une liaison unique et disponible et une
 publication valide de moins de 10 min, au plus 60 s dans le futur et au moins
-aussi récente que l’état climate. Le timer local existant retire une valeur
+aussi récente que le dernier changement de mode climate (`last_changed`). Une
+mise à jour d’attributs (`last_updated`, action HVAC, motifs, etc.) ne suffit pas
+à invalider une commande récente. Si `last_changed` est absent, repli prudent sur
+`last_updated` ; s’il est invalide, les indications restent indisponibles. L’écart
+compare la mesure reçue à la consigne brute actuellement active, même après une
+modification de cette consigne ; ce n’est pas une prévision. L’ETA conserve son
+contrôle strict sur `last_updated`. Le timer local existant retire une valeur
 périmée. Mesure, unité ou cible manquante : écart indisponible ; le pourcentage
 peut rester visible si lui seul est exploitable. Aucun abonnement ou appel
 réseau supplémentaire ; les gardes ETA et les commandes explicites ne changent pas.

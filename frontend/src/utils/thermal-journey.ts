@@ -87,9 +87,13 @@ export class ThermalJourney {
   }
   private currentPublication(now: number) {
     if (!this.available) return false;
-    const published = Date.parse(this.diagnostic.lastUpdated ?? ""), climateTime = Date.parse(this.climate!.last_updated ?? "");
-    return Number.isFinite(now) && Number.isFinite(published) && Number.isFinite(climateTime) &&
-      published >= climateTime && now - published <= 600_000 && published <= now + 60_000;
+    // Attribute updates (hvac_action, sensors, reasons, etc.) are not mode changes.
+    // The command belongs to the diagnostic publication; only a newer HVAC mode
+    // makes its direction ambiguous. Keep a conservative fallback for old clients.
+    const published = Date.parse(this.diagnostic.lastUpdated ?? "");
+    const modeTime = Date.parse(this.climate!.last_changed ?? this.climate!.last_updated ?? "");
+    return Number.isFinite(now) && Number.isFinite(published) && Number.isFinite(modeTime) &&
+      published >= modeTime && now - published <= 600_000 && published <= now + 60_000;
   }
   appliedEffort(now = Date.now()) {
     if (!this.currentPublication(now)) return null;
@@ -100,6 +104,7 @@ export class ThermalJourney {
       label: mode === "heat" ? "Commande de chauffe" : mode === "cool" ? "Commande de refroidissement" : "Commande appliquée"};
   }
   setpointPosition(now = Date.now()) {
+    // A descriptive gap to the current raw target, not the diagnostic's old ETA.
     if (!this.currentPublication(now) || this.unit === null || this.measured === null || this.target === null || !["heat", "cool"].includes(this.climate!.state)) return null;
     // Compare the same tenth shown on the ruler, without claiming a Twin tolerance.
     const delta = Math.round(this.measured * 10) - Math.round(this.target * 10);

@@ -525,6 +525,25 @@ try {
     f.sensor.attributes.live.power.applied_percent=42;${sync}return results.every(Boolean)&&getComputedStyle(r.querySelector('.effort-arrow')).clipPath!=='none';
   `);
   assert.ok(checks.journeyEffortProportion);
+  checks.journeyAttributeTiming = await journey(`
+    const updated=f.climate.last_updated,changed=f.climate.last_changed,source=f.sensor.last_updated;
+    const results=[];
+    f.climate.last_changed=new Date(Date.now()-60000).toISOString();
+    for(let i=0;i<5;i++){
+      f.climate.last_updated=new Date(Date.now()+i+1).toISOString();
+      f.climate.attributes.hvac_action=i%2?'idle':'heating';${sync}
+      results.push(!!r.querySelector('.effort-arrow')&&r.querySelector('[role=meter]')?.getAttribute('aria-valuenow')==='42'&&
+        r.querySelector('.setpoint-position').textContent.includes('Encore')&&!r.querySelector('.eta'));
+    }
+    f.climate.state='cool';f.climate.last_changed=new Date(Date.now()+20).toISOString();${sync}
+    results.push(!r.querySelector('[role=meter]')&&!r.querySelector('.return-chevron'));
+    f.sensor.last_updated=new Date(Date.now()+30).toISOString();${sync}
+    results.push(!!r.querySelector('.effort-arrow.reverse'));
+    f.climate.state='heat';f.climate.last_updated=updated;f.climate.last_changed=changed;
+    f.climate.attributes.hvac_action='heating';f.sensor.last_updated=source;${sync}
+    return results.every(Boolean)&&f.calls.length===0;
+  `);
+  assert.ok(checks.journeyAttributeTiming);
   checks.journeyOvershootAndZero = await journey(`
     f.sensor.attributes.live.temperature.indoor=20.3;f.sensor.attributes.live.power.applied_percent=12;${sync}
     const positive=r.querySelector('.return-chevron')?.dataset.direction==='left'&&r.querySelector('.setpoint-position').textContent.includes('+0,3')&&

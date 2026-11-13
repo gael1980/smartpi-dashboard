@@ -129,3 +129,36 @@ test('display alignment, cooling return and native Fahrenheit do not use Twin pr
  assert.equal(f.model().setpointPosition(now).gap,.5);
  f.climate.state='off';assert.equal(f.model().setpointPosition(now),null);
 });
+
+test('routine climate attribute updates preserve a recent command and current-target gap',()=>{
+ const f=fixture();f.sensor.attributes.live.power={applied_percent:42};
+ f.climate.last_changed=new Date(now-60000).toISOString();
+ f.climate.last_updated=new Date(now+1).toISOString();
+ f.climate.attributes.hvac_action='idle';
+ assert.equal(f.model().appliedEffort(now)?.percent,42);
+ assert.equal(f.model().setpointPosition(now)?.gap,.8);
+ f.climate.attributes.temperature=21;
+ assert.equal(f.model().setpointPosition(now)?.gap,1.8);
+ assert.equal(f.model().eta(false,now),null);
+});
+test('mode transitions wait for a diagnostic from the new mode',()=>{
+ for(const mode of ['heat','cool','off']){
+  const f=fixture();f.sensor.attributes.live.power={applied_percent:42};f.climate.state=mode;
+  f.climate.last_changed=new Date(now+1).toISOString();
+  assert.equal(f.model().appliedEffort(now),null);assert.equal(f.model().setpointPosition(now),null);
+  f.sensor.last_updated=new Date(now+2).toISOString();
+  assert.equal(f.model().appliedEffort(now)?.direction,mode==='heat'?1:mode==='cool'?-1:0);
+ }
+ for(const time of ['', 'invalid']){
+  const f=fixture();f.sensor.attributes.live.power={applied_percent:42};f.climate.last_changed=time;
+  assert.equal(f.model().appliedEffort(now),null);
+ }
+});
+test('freshness refuses invalid clocks and unavailable bindings with an old mode timestamp',()=>{
+ const f=fixture();f.sensor.attributes.live.power={applied_percent:42};
+ f.climate.last_changed=new Date(now-60000).toISOString();
+ for(const time of [NaN,Infinity,now+600001,now-60001]){
+  assert.equal(f.model().appliedEffort(time),null);assert.equal(f.model().setpointPosition(time),null);
+ }
+ f.climate.state='unavailable';assert.equal(f.model().appliedEffort(now),null);
+});
