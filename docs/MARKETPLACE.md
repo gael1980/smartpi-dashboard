@@ -23,7 +23,7 @@ PR de catalogue n’est créée par cette publication.
 - Une seule intégration, manifeste complet, catégorie thermostat/chauffage.
 - Version minimale Home Assistant **2026.11.0** dans `hacs.json`.
 - README, licence MIT, notices frontend et icônes locales inclus.
-- Traductions d’installation françaises et anglaises ; panneau en français.
+- Traductions d’installation françaises et anglaises ; panneau en français et en anglais selon la langue de l’utilisateur Home Assistant.
 - Store natif de l’observatoire hors du composant, préservé à la mise à jour.
 - Workflow de validation du dépôt pour la catégorie integration et hassfest,
   sans contrôle ignoré. Les résultats exacts se consultent sur le commit publié.

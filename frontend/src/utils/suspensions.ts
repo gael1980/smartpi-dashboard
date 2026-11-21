@@ -1,11 +1,12 @@
 import type {ObservationPoint} from "./evidence";
+import {N_} from "../i18n";
 export type SuspensionState = "active" | "inactive" | "unknown";
 export type SuspensionKey = "window" | "safety" | "overpowering";
 export interface SuspensionInterval {start: number; end: number; state: SuspensionState}
 export const suspensionRows: {key: SuspensionKey; label: string; color: string}[] = [
-  {key:"window",label:"Fenêtre",color:"#28799c"},
-  {key:"safety",label:"Sécurité",color:"#ae4e48"},
-  {key:"overpowering",label:"Délestage",color:"#99651d"},
+  {key:"window",label:N_("Fenêtre"),color:"#28799c"},
+  {key:"safety",label:N_("Sécurité"),color:"#ae4e48"},
+  {key:"overpowering",label:N_("Délestage"),color:"#99651d"},
 ];
 /** Discrete states observed by the local notebook, never reconstructed from Recorder or today's climate. */
 export function suspensionIntervals(points: readonly ObservationPoint[], key: SuspensionKey, start: number, end: number): SuspensionInterval[] {

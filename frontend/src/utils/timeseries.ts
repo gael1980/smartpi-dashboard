@@ -7,6 +7,7 @@ import {
   type Rec,
   type SmartPIDiagnostic,
 } from "../adapter";
+import {tr, locale} from "../i18n";
 
 export const HISTORY_PATHS = [
   "temperature.indoor",
@@ -45,7 +46,7 @@ export function timestamp(value: unknown): number | null {
 }
 export function decodeRows(rows: unknown): Sample[] {
   if (!Array.isArray(rows))
-    throw new Error("Réponse Recorder invalide (liste attendue).");
+    throw new Error(tr("Réponse Recorder invalide (liste attendue)."));
   const samples: Sample[] = [];
   for (const row of rows) {
     if (!record(row)) continue;
@@ -84,9 +85,9 @@ function sampleUnit(sample: Pick<Sample, "unit">): "°C" | "°F" | null {
   return sample.unit === "°C" || sample.unit === "°F" ? sample.unit : null;
 }
 /** Only recorded metadata can label archived values; unknown stays unknown. */
-export function archivedUnit(samples: readonly Pick<Sample, "unit">[]): "°C" | "°F" | "unité source" {
+export function archivedUnit(samples: readonly Pick<Sample, "unit">[]): string {
   const units = new Set(samples.map(sampleUnit));
-  return units.size === 1 ? sampleUnit(samples[0]) ?? "unité source" : "unité source";
+  return units.size === 1 ? sampleUnit(samples[0]) ?? tr("unité source") : tr("unité source");
 }
 export function compatibleSampleUnits(samples: readonly Pick<Sample, "unit">[]): boolean {
   return new Set(samples.map(sampleUnit)).size <= 1;
@@ -152,24 +153,24 @@ export function observedEvents(samples: Sample[]): DiagnosticEvent[] {
     if (sameSampleContext(a, b) && from !== null && to !== null && from !== to)
       events.push({
         time: b.time,
-        label: `Consigne filtrée ${from} → ${to} ${archivedUnit([a,b])}`,
+        label: tr("Consigne filtrée {0} → {1} {2}", from, to, archivedUnit([a,b])),
         provenance:
-          "Variation observée entre publications ; ce n’est pas nécessairement une modification utilisateur.",
+          tr("Variation observée entre publications ; ce n’est pas nécessairement une modification utilisateur."),
       });
     if (a.state !== b.state)
       events.push({
         time: b.time,
-        label: `Phase / état : ${a.state} → ${b.state}`,
+        label: tr("Phase / état : {0} → {1}", a.state, b.state),
         provenance:
-          "Transition observée entre deux états du capteur ; instant exact interne non disponible.",
+          tr("Transition observée entre deux états du capteur ; instant exact interne non disponible."),
       });
     for (const [path, label] of [
-      ["control.saturation_state", "Saturation"],
+      ["control.saturation_state", tr("Saturation")],
       ["feedforward.ff3_status", "FF3"],
-      ["control.in_deadtime_window", "Temps mort"],
-      ["learning.last_reason", "Apprentissage"],
-      ["governance.thermal_update_reason", "Gouvernance"],
-      ["autocalib.state", "Autocalibration"],
+      ["control.in_deadtime_window", tr("Temps mort")],
+      ["learning.last_reason", tr("Apprentissage")],
+      ["governance.thermal_update_reason", tr("Gouvernance")],
+      ["autocalib.state", tr("Autocalibration")],
     ]) {
       const prev = at(a.live, path),
         next = at(b.live, path);
@@ -183,7 +184,7 @@ export function observedEvents(samples: Sample[]): DiagnosticEvent[] {
         events.push({
           time: b.time,
           label: `${label} : ${String(next)}`,
-          provenance: `Comparaison des publications live enregistrées ou de session : ${path}.`,
+          provenance: tr("Comparaison des publications live enregistrées ou de session : {0}.", path),
         });
     }
   }
@@ -276,14 +277,14 @@ export function learningMarks(samples: readonly Sample[]): LearningMark[] {
       const before = count(previous, key), after = count(current, key);
       const value = valueAt(current, `model.${key}`);
       const unit = kind === "A" ? `${archivedUnit([current])}/min/u` : "min⁻¹";
-      const published = value === null ? "valeur indisponible" : `${value} ${unit}`;
+      const published = value === null ? tr("valeur indisponible") : `${value} ${unit}`;
       if (before !== null && after !== null && after > before)
-        marks.push({ ...point, kind, label: `${kind} · +${after - before} accepté(s) entre ${new Date(previous.time * 1000).toLocaleString()} et cette publication · ${published}` });
+        marks.push({ ...point, kind, label: tr("{0} · +{1} accepté(s) entre {2} et cette publication · {3}", kind, after - before, new Date(previous.time * 1000).toLocaleString(locale()), published) });
       const oldSamples = num(at(previous.live, `learning.emea_samples_${key}`));
       const newSamples = num(at(current.live, `learning.emea_samples_${key}`));
       if (!(before !== null && after !== null && after > before)
           && oldSamples !== null && newSamples !== null && oldSamples >= 0 && newSamples > oldSamples)
-        marks.push({ ...point, kind, label: `${kind} · +${newSamples - oldSamples} mesure(s) collectée(s) entre ${new Date(previous.time * 1000).toLocaleString()} et cette publication · ${published}` });
+        marks.push({ ...point, kind, label: tr("{0} · +{1} mesure(s) collectée(s) entre {2} et cette publication · {3}", kind, newSamples - oldSamples, new Date(previous.time * 1000).toLocaleString(locale()), published) });
     }
     for (const [direction, kind] of [["heat", "Chauffe"], ["cool", "Refroidissement"]] as const) {
       const estimate = (sample: Sample) => num(reliableValue(
@@ -295,8 +296,8 @@ export function learningMarks(samples: readonly Sample[]): LearningMark[] {
       const detected = typeof previousOutcome === "string" && previousOutcome !== "detected"
         && at(current.live, path) === "detected";
       if (detected || (value !== null && value >= 0 && value !== estimate(previous))) {
-        const duration = value !== null && value >= 0 ? `médiane ${value} s` : "médiane indisponible";
-        marks.push({ ...point, kind, label: `${kind} · ${detected ? "détection observée · " : ""}${duration}` });
+        const duration = value !== null && value >= 0 ? tr("médiane {0} s", value) : tr("médiane indisponible");
+        marks.push({ ...point, kind, label: `${kind} · ${detected ? tr("détection observée · ") : ""}${duration}` });
       }
     }
   }

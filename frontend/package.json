@@ -6,7 +6,7 @@
   "scripts": {
     "build": "node scripts/build.mjs",
     "typecheck": "tsc --noEmit",
-    "test": "esbuild src/adapter.ts src/utils/timeseries.ts src/utils/control.ts src/utils/thermal-journey.ts src/utils/decision.ts src/utils/diagnostic-projection.ts src/utils/evidence.ts src/utils/archived-diagnostic.ts src/utils/suspensions.ts src/utils/smartpi-explanations.ts src/services/history.ts src/services/climate.ts src/services/observatory.ts --bundle --platform=node --format=esm --target=node22 --outdir=.build-tests --out-extension:.js=.mjs && node --test tests/*.test.mjs"
+    "test": "esbuild src/i18n.ts src/locales/en.ts src/adapter.ts src/utils/timeseries.ts src/utils/control.ts src/utils/thermal-journey.ts src/utils/decision.ts src/utils/diagnostic-projection.ts src/utils/evidence.ts src/utils/archived-diagnostic.ts src/utils/suspensions.ts src/utils/smartpi-explanations.ts src/services/history.ts src/services/climate.ts src/services/observatory.ts --bundle --platform=node --format=esm --target=node22 --splitting --outdir=.build-tests --out-extension:.js=.mjs && node --test tests/*.test.mjs"
   },
   "dependencies": {
     "lit": "3.3.1",

@@ -1,8 +1,9 @@
 import {at, num, type HassLike, type HAState, type SmartPIDiagnostic} from "../adapter";
+import {tr, N_, translatedTable} from "../i18n";
 
 export type Choice = {kind: "temperature"; value: number} | {kind: "preset"; value: string};
 export type Preset = {id: string; label: string; temperature: number | null};
-const labels: Record<string, string> = {none: "Manuel", frost: "Hors gel", eco: "Éco", comfort: "Confort", boost: "Boost", activity: "Activité"};
+const labels: Record<string, string> = translatedTable({none: N_("Manuel"), frost: N_("Hors gel"), eco: N_("Éco"), comfort: N_("Confort"), boost: "Boost", activity: N_("Activité")});
 
 /** Presentation of published values only: no thermal forecast is computed here. */
 export class ThermalJourney {
@@ -101,7 +102,7 @@ export class ThermalJourney {
     if (percent === null || percent < 0 || percent > 100) return null;
     const mode = this.climate!.state;
     return {percent, direction: mode === "heat" ? 1 : mode === "cool" ? -1 : 0,
-      label: mode === "heat" ? "Commande de chauffe" : mode === "cool" ? "Commande de refroidissement" : "Commande appliquée"};
+      label: mode === "heat" ? tr("Commande de chauffe") : mode === "cool" ? tr("Commande de refroidissement") : tr("Commande appliquée")};
   }
   maintenanceEffort(now = Date.now()) {
     const effort = this.appliedEffort(now), live = this.diagnostic.live;
@@ -130,28 +131,28 @@ export class ThermalJourney {
   }
   twinPresentation(preview = false, waiting = false, now = Date.now()) {
     const absent = (detail: string) => ({estimated: null, predicted: null, eta: null, detail});
-    if (preview) return absent("Aperçu du réglage · la projection de la consigne active est masquée.");
-    if (waiting) return absent("En attente d’une nouvelle publication après le changement de consigne.");
+    if (preview) return absent(tr("Aperçu du réglage · la projection de la consigne active est masquée."));
+    if (waiting) return absent(tr("En attente d’une nouvelle publication après le changement de consigne."));
     if (!this.available || this.unit === null || !["heat", "cool"].includes(this.climate!.state))
-      return absent("Projection indisponible dans cet état du thermostat.");
-    if (!this.currentPublication(now)) return absent("Données Twin récentes indisponibles.");
+      return absent(tr("Projection indisponible dans cet état du thermostat."));
+    if (!this.currentPublication(now)) return absent(tr("Données Twin récentes indisponibles."));
     const twin = (path: string) => at(this.diagnostic.live, "analysis.twin." + path);
-    if (twin("twin_warming_up") === true) return absent("Le Twin est en cours d’initialisation.");
+    if (twin("twin_warming_up") === true) return absent(tr("Le Twin est en cours d’initialisation."));
     if (twin("twin_status") !== "ok" || twin("twin_model_reliable") !== true || twin("twin_warming_up") !== false)
-      return absent("Le Twin ne publie pas de modèle fiable disponible.");
+      return absent(tr("Le Twin ne publie pas de modèle fiable disponible."));
     const estimated = num(twin("twin_T_hat")), predicted = num(twin("twin_T_pred"));
     const eta = this.eta(false, now);
-    let detail = eta?.detail ?? "Aucun délai calculable publié par le Twin.";
+    let detail = eta?.detail ?? tr("Aucun délai calculable publié par le Twin.");
     if (!eta) {
       const reason = twin("eta_reason");
-      if (at(this.diagnostic.live, "model.tau_reliable") !== true) detail = "ETA indisponible · constante de temps non fiable.";
+      if (at(this.diagnostic.live, "model.tau_reliable") !== true) detail = tr("ETA indisponible · constante de temps non fiable.");
       else if (reason === "unreachable") detail = this.climate!.state === "heat" && this.measured !== null && this.target !== null && this.measured > this.target
-        ? "Pas de délai de retour : l’ETA simule une chauffe maximale alors que la mesure dépasse la consigne."
-        : "La consigne n’est pas atteinte dans le scénario ETA du Twin ; ce résultat ne décrit pas toutes les actions du régulateur.";
-      else if (reason === "too_far") detail = "Le délai publié dépasse l’horizon de 48 h affichable.";
-      else if (reason === "missing_text") detail = "ETA indisponible · température extérieure manquante.";
-      else if (reason === "not_reliable") detail = "ETA indisponible · modèle déclaré non fiable pour ce calcul.";
-      else if (reason === "ok" || reason === "already_reached") detail = "ETA en attente de données cohérentes et récentes pour la consigne active.";
+        ? tr("Pas de délai de retour : l’ETA simule une chauffe maximale alors que la mesure dépasse la consigne.")
+        : tr("La consigne n’est pas atteinte dans le scénario ETA du Twin ; ce résultat ne décrit pas toutes les actions du régulateur.");
+      else if (reason === "too_far") detail = tr("Le délai publié dépasse l’horizon de 48 h affichable.");
+      else if (reason === "missing_text") detail = tr("ETA indisponible · température extérieure manquante.");
+      else if (reason === "not_reliable") detail = tr("ETA indisponible · modèle déclaré non fiable pour ce calcul.");
+      else if (reason === "ok" || reason === "already_reached") detail = tr("ETA en attente de données cohérentes et récentes pour la consigne active.");
     }
     return {estimated, predicted, eta, detail};
   }
@@ -165,10 +166,10 @@ export class ThermalJourney {
     if (twin("twin_status") !== "ok" || twin("twin_model_reliable") !== true || twin("twin_warming_up") !== false || at(live, "model.tau_reliable") !== true)
       return null;
     const seconds = num(twin("eta_s")), reason = twin("eta_reason");
-    if (reason === "already_reached" && seconds === 0) return {label: "À la consigne", detail: "Selon la tolérance du Twin SmartPI.", seconds: 0};
+    if (reason === "already_reached" && seconds === 0) return {label: tr("À la consigne"), detail: tr("Selon la tolérance du Twin SmartPI."), seconds: 0};
     if (reason !== "ok" || seconds === null || seconds <= 0 || seconds > 48 * 3600) return null;
     const minutes = Math.ceil(seconds / 60);
-    return {label: minutes < 60 ? `≈ ${minutes} min` : `≈ ${Math.floor(minutes / 60)} h ${String(minutes % 60).padStart(2, "0")}`,
-      detail: "Meilleur cas du Twin · conditions constantes, commande maximale en chauffe. Pas une heure d’arrivée garantie.", seconds};
+    return {label: minutes < 60 ? tr("≈ {0} min", minutes) : `≈ ${Math.floor(minutes / 60)} h ${String(minutes % 60).padStart(2, "0")}`,
+      detail: tr("Meilleur cas du Twin · conditions constantes, commande maximale en chauffe. Pas une heure d’arrivée garantie."), seconds};
   }
 }

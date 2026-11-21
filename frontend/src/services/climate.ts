@@ -2,6 +2,7 @@ import {discover, type HassLike, type SmartPIDiagnostic} from "../adapter";
 import {ThermalJourney, type Choice} from "../utils/thermal-journey";
 import {ObservatoryClient, type ObservatoryConnection} from "./observatory";
 import {record} from "../adapter";
+import {tr} from "../i18n";
 
 export interface ClimateConnection {
   callService(domain: string, service: string, data: Record<string, unknown>): Promise<unknown>;
@@ -12,10 +13,10 @@ export async function applyClimateChoice(hass: HassLike & Partial<ClimateConnect
   // Keep the validated choice immutable across the metadata await.
   choice = {...choice};
   const latest = discover(hass).find(d => d.entityId === diagnostic.entityId && d.climateId === diagnostic.climateId);
-  if (!latest || typeof hass.callService !== "function") throw new Error("Commande indisponible dans cette connexion.");
+  if (!latest || typeof hass.callService !== "function") throw new Error(tr("Commande indisponible dans cette connexion."));
   const model = new ThermalJourney(hass, latest);
-  if (model.context !== context) throw new Error("Le thermostat a changé. Sélectionnez à nouveau votre choix.");
-  if (!model.validate(choice)) throw new Error("Ce réglage n’est plus disponible ou ne respecte pas les limites du thermostat.");
+  if (model.context !== context) throw new Error(tr("Le thermostat a changé. Sélectionnez à nouveau votre choix."));
+  if (!model.validate(choice)) throw new Error(tr("Ce réglage n’est plus disponible ou ne respecte pas les limites du thermostat."));
   const client = new ObservatoryClient(hass);
   let receipt: string | null = null, started = false;
   try {
@@ -25,7 +26,7 @@ export async function applyClimateChoice(hass: HassLike & Partial<ClimateConnect
   try {
     const current = discover(hass).find(d => d.entityId === diagnostic.entityId && d.climateId === diagnostic.climateId);
     const currentModel = current ? new ThermalJourney(hass, current) : undefined;
-    if (!isCurrent() || !currentModel || currentModel.context !== context || !currentModel.validate(choice)) throw new Error("Le thermostat a changé avant l’envoi. Sélectionnez à nouveau votre choix.");
+    if (!isCurrent() || !currentModel || currentModel.context !== context || !currentModel.validate(choice)) throw new Error(tr("Le thermostat a changé avant l’envoi. Sélectionnez à nouveau votre choix."));
     started = true;
     if (choice.kind === "temperature") {
       await hass.callService("climate", "set_temperature", {entity_id: latest.climateId, temperature: choice.value});

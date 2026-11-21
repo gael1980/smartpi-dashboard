@@ -2,6 +2,7 @@ import { LitElement, html, css } from "lit";
 import { customElement, property } from "lit/decorators.js";
 import { display, at, type SmartPIDiagnostic } from "../adapter";
 import { ControlPresentation } from "../utils/control";
+import {tr} from "../i18n";
 @customElement("smartpi-command-chain")
 export class CommandChain extends LitElement {
   @property({ attribute: false }) diagnostic?: SmartPIDiagnostic;
@@ -10,11 +11,11 @@ export class CommandChain extends LitElement {
     const view = new ControlPresentation(this.diagnostic),
       chain = view.chain(),
       max = Math.max(100, ...chain.map((c) => Math.abs(c.value ?? 0)));
-    return html`<h3>Chaîne U <span>Instantané · % de commande</span></h3>
+    return html`<h3>${tr("Chaîne U")} <span>${tr("Instantané · % de commande")}</span></h3>
       <p>
         ${view.bypass
-          ? "Chemin direct actif : ces contributions PI/FF ne construisent pas la commande appliquée."
-          : "FF final = clamp(FF1 + FF2), puis FF effectif = clamp(FF final + FF3). En bande morte, FF final est retenu sans FF3 ; ailleurs FF effectif est retenu. PI et FF retenu précèdent les limites ; Hold est un état de maintien, pas une contribution à additionner."}
+          ? tr("Chemin direct actif : ces contributions PI/FF ne construisent pas la commande appliquée.")
+          : tr("FF final = clamp(FF1 + FF2), puis FF effectif = clamp(FF final + FF3). En bande morte, FF final est retenu sans FF3 ; ailleurs FF effectif est retenu. PI et FF retenu précèdent les limites ; Hold est un état de maintien, pas une contribution à additionner.")}
       </p>
       ${chain.map(
         (c) =>
@@ -32,26 +33,23 @@ export class CommandChain extends LitElement {
           </div>`,
       )}
       <p>
-        Ces diagnostics peuvent décrire un candidat et un cycle déjà engagé.
-        Leurs différences ne sont pas une preuve de perte ni de limitation.
+        ${tr("Ces diagnostics peuvent décrire un candidat et un cycle déjà engagé. Leurs différences ne sont pas une preuve de perte ni de limitation.")}
       </p>
       <p>
-        Échelle symétrique ±${display(max, " %")} ; aucune composante hors 0–100
-        % n’est tronquée. Ratios FF convertis ×100 pour cette vue.
+        ${tr("Échelle symétrique ±")}${display(max, " %")} ${tr("; aucune composante hors 0–100 % n’est tronquée. Ratios FF convertis ×100 pour cette vue.")}
       </p>
       <p>
-        Raison FF2 :
+        ${tr("Raison FF2 :")}
         ${display(
           at(this.diagnostic.live, "analysis.feedforward.ff2_freeze_reason"),
         )}
         · FF3 : ${display(at(this.diagnostic.live, "feedforward.ff3_status"))} ·
-        Intégrale :
+        ${tr("Intégrale :")}
         ${display(at(this.diagnostic.live, "temperature.integral_mode"))}
       </p>
       ${at(this.diagnostic.live, "power.valve_linearization_enabled") === true
         ? html`<p>
-            Courbe de vanne active : les espaces linéaire et actionneur
-            diffèrent. Aucun écart causal n’est calculé entre ces étapes.
+            ${tr("Courbe de vanne active : les espaces linéaire et actionneur diffèrent. Aucun écart causal n’est calculé entre ces étapes.")}
           </p>`
         : null}`;
   }

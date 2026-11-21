@@ -17,109 +17,110 @@ import type {ThermalJourneyElement} from "./components/thermal-journey";
 import {SessionHistory, timestamp} from "./utils/timeseries";
 import {ThermalJourney} from "./utils/thermal-journey";
 import type {HistoryConnection} from "./services/history";
+import {tr, N_, dateTimeFormat, setLanguage} from "./i18n";
 
 type Field = {label: string, path: string, unit?: string, digits?: number, reliable?: string};
 type Section = {title: string, note: string, fields: Field[]};
 
-const publicationFormat = new Intl.DateTimeFormat("fr-FR", {
+const publicationFormat = () => dateTimeFormat({
   dateStyle: "medium",
   timeStyle: "short",
 });
 
 const sections: Section[] = [
-  {title: "Régulation PI et chaîne U", note: "Séparer commande calculée, limitation et commande appliquée.", fields: [
-    {label:"Phase",path:"control.phase"}, {label:"Mode",path:"control.mode"},
+  {title: N_("Régulation PI et chaîne U"), note: N_("Séparer commande calculée, limitation et commande appliquée."), fields: [
+    {label:N_("Phase"),path:"control.phase"}, {label:N_("Mode"),path:"control.mode"},
     {label:"Kp",path:"control.kp",digits:6}, {label:"Ki",path:"control.ki",digits:6},
     {label:"Ti",path:"control.ti_min",unit:" min"},
-    {label:"Part PI",path:"power.pi_percent",unit:" %"},
-    {label:"Part FF",path:"power.ff_percent",unit:" %"},
-    {label:"Commande demandée",path:"power.command_percent",unit:" %"},
-    {label:"Commande limitée",path:"power.limited_percent",unit:" %"},
-    {label:"Commande appliquée",path:"power.applied_percent",unit:" %"},
-    {label:"Cycle en cours",path:"power.current_cycle_percent",unit:" %"},
-    {label:"Cycle suivant",path:"power.next_cycle_percent",unit:" %"},
-    {label:"État saturation",path:"control.saturation_state"},
-    {label:"Intégrale",path:"temperature.integral_error",digits:6},
-    {label:"Gestion intégrale",path:"temperature.integral_mode"},
-    {label:"Anti-windup Δu",path:"analysis.control.aw_du",digits:6},
-    {label:"Bande morte",path:"control.in_deadband"},
-    {label:"Proche consigne",path:"control.in_near_band"},
+    {label:N_("Part PI"),path:"power.pi_percent",unit:" %"},
+    {label:N_("Part FF"),path:"power.ff_percent",unit:" %"},
+    {label:N_("Commande demandée"),path:"power.command_percent",unit:" %"},
+    {label:N_("Commande limitée"),path:"power.limited_percent",unit:" %"},
+    {label:N_("Commande appliquée"),path:"power.applied_percent",unit:" %"},
+    {label:N_("Cycle en cours"),path:"power.current_cycle_percent",unit:" %"},
+    {label:N_("Cycle suivant"),path:"power.next_cycle_percent",unit:" %"},
+    {label:N_("État saturation"),path:"control.saturation_state"},
+    {label:N_("Intégrale"),path:"temperature.integral_error",digits:6},
+    {label:N_("Gestion intégrale"),path:"temperature.integral_mode"},
+    {label:N_("Anti-windup Δu"),path:"analysis.control.aw_du",digits:6},
+    {label:N_("Bande morte"),path:"control.in_deadband"},
+    {label:N_("Proche consigne"),path:"control.in_near_band"},
   ]},
-  {title: "Modèle thermique A / B", note: "Le modèle 1R1C est appris (A : °C/min à commande unitaire ; B : min⁻¹) ; sa fiabilité est distincte de la valeur affichée.", fields: [
-    {label:"Gain de chauffe A",path:"model.a",digits:6},
-    {label:"Pertes B",path:"model.b",digits:6},
-    {label:"Confiance A/B",path:"model.confidence"},
-    {label:"Constante τ",path:"model.tau_min",unit:" min",reliable:"model.tau_reliable"},
-    {label:"Fiabilité τ",path:"model.tau_reliable"},
-    {label:"Temps mort de chauffe",path:"model.deadtime_heat_s",unit:" s",digits:0,reliable:"model.deadtime_heat_reliable"},
-    {label:"Fiabilité chauffe",path:"model.deadtime_heat_reliable"},
-    {label:"Temps mort de refroidissement",path:"model.deadtime_cool_s",unit:" s",digits:0,reliable:"model.deadtime_cool_reliable"},
-    {label:"Fiabilité refroidissement",path:"model.deadtime_cool_reliable"},
-    {label:"Stabilité A",path:"model.a_stability_ratio",digits:3},
-    {label:"Stabilité B",path:"model.b_stability_ratio",digits:3},
-    {label:"Détection du temps mort",path:"analysis.deadtime.state"},
-    {label:"Dernière issue chauffe",path:"analysis.deadtime.heat_last_outcome"},
-    {label:"Dernière issue refroidissement",path:"analysis.deadtime.cool_last_outcome"},
+  {title: N_("Modèle thermique A / B"), note: N_("Le modèle 1R1C est appris (A : °C/min à commande unitaire ; B : min⁻¹) ; sa fiabilité est distincte de la valeur affichée."), fields: [
+    {label:N_("Gain de chauffe A"),path:"model.a",digits:6},
+    {label:N_("Pertes B"),path:"model.b",digits:6},
+    {label:N_("Confiance A/B"),path:"model.confidence"},
+    {label:N_("Constante τ"),path:"model.tau_min",unit:" min",reliable:"model.tau_reliable"},
+    {label:N_("Fiabilité τ"),path:"model.tau_reliable"},
+    {label:N_("Temps mort de chauffe"),path:"model.deadtime_heat_s",unit:" s",digits:0,reliable:"model.deadtime_heat_reliable"},
+    {label:N_("Fiabilité chauffe"),path:"model.deadtime_heat_reliable"},
+    {label:N_("Temps mort de refroidissement"),path:"model.deadtime_cool_s",unit:" s",digits:0,reliable:"model.deadtime_cool_reliable"},
+    {label:N_("Fiabilité refroidissement"),path:"model.deadtime_cool_reliable"},
+    {label:N_("Stabilité A"),path:"model.a_stability_ratio",digits:3},
+    {label:N_("Stabilité B"),path:"model.b_stability_ratio",digits:3},
+    {label:N_("Détection du temps mort"),path:"analysis.deadtime.state"},
+    {label:N_("Dernière issue chauffe"),path:"analysis.deadtime.heat_last_outcome"},
+    {label:N_("Dernière issue refroidissement"),path:"analysis.deadtime.cool_last_outcome"},
   ]},
-  {title: "Apprentissage et gouvernance", note: "Voir les fenêtres, le bootstrap, les rejets et les décisions de gouvernance.", fields: [
-    {label:"Apprentissage autorisé",path:"learning.enabled"},
-    {label:"Étape",path:"learning.stage"},
-    {label:"État du bootstrap",path:"learning.bootstrap_status"},
-    {label:"Mesures A",path:"learning.emea_samples_a",digits:0},
-    {label:"Mesures B",path:"learning.emea_samples_b",digits:0},
-    {label:"Mises à jour A acceptées",path:"learning.accepted_updates_a",digits:0},
-    {label:"Mises à jour B acceptées",path:"learning.accepted_updates_b",digits:0},
-    {label:"Dernier motif",path:"learning.last_reason"},
-    {label:"Dérive A",path:"learning.a_drift_state"},
-    {label:"Dérive B",path:"learning.b_drift_state"},
-    {label:"Régime thermique",path:"governance.regime"},
-    {label:"Décision thermique",path:"governance.thermal_update_decision"},
-    {label:"Raison décision",path:"governance.thermal_update_reason"},
-    {label:"Décision gains",path:"analysis.governance.last_decision_gains"},
-    {label:"Source Kp",path:"analysis.governance.kp_source"},
-    {label:"Délai de réponse",path:"analysis.learning.response_lag.lag_s",unit:" s",digits:0},
-    {label:"Motif délai",path:"analysis.learning.response_lag.last_reason"},
+  {title: N_("Apprentissage et gouvernance"), note: N_("Voir les fenêtres, le bootstrap, les rejets et les décisions de gouvernance."), fields: [
+    {label:N_("Apprentissage autorisé"),path:"learning.enabled"},
+    {label:N_("Étape"),path:"learning.stage"},
+    {label:N_("État du bootstrap"),path:"learning.bootstrap_status"},
+    {label:N_("Mesures A"),path:"learning.emea_samples_a",digits:0},
+    {label:N_("Mesures B"),path:"learning.emea_samples_b",digits:0},
+    {label:N_("Mises à jour A acceptées"),path:"learning.accepted_updates_a",digits:0},
+    {label:N_("Mises à jour B acceptées"),path:"learning.accepted_updates_b",digits:0},
+    {label:N_("Dernier motif"),path:"learning.last_reason"},
+    {label:N_("Dérive A"),path:"learning.a_drift_state"},
+    {label:N_("Dérive B"),path:"learning.b_drift_state"},
+    {label:N_("Régime thermique"),path:"governance.regime"},
+    {label:N_("Décision thermique"),path:"governance.thermal_update_decision"},
+    {label:N_("Raison décision"),path:"governance.thermal_update_reason"},
+    {label:N_("Décision gains"),path:"analysis.governance.last_decision_gains"},
+    {label:N_("Source Kp"),path:"analysis.governance.kp_source"},
+    {label:N_("Délai de réponse"),path:"analysis.learning.response_lag.lag_s",unit:" s",digits:0},
+    {label:N_("Motif délai"),path:"analysis.learning.response_lag.last_reason"},
   ]},
-  {title: "Feedforward FF1 / FF2 / FF3", note: "Les contributions u_ff sont des ratios (1 = 100 % de commande), pas des watts. Comprendre le refus éventuel d’une correction.", fields: [
-    {label:"État FF3",path:"feedforward.ff3_status"},
-    {label:"Raison FF",path:"analysis.feedforward.reason"},
+  {title: N_("Feedforward FF1 / FF2 / FF3"), note: N_("Les contributions u_ff sont des ratios (1 = 100 % de commande), pas des watts. Comprendre le refus éventuel d’une correction."), fields: [
+    {label:N_("État FF3"),path:"feedforward.ff3_status"},
+    {label:N_("Raison FF"),path:"analysis.feedforward.reason"},
     {label:"FF1",path:"analysis.feedforward.u_ff1",digits:6},
     {label:"FF2",path:"analysis.feedforward.u_ff2",digits:6},
     {label:"FF3",path:"analysis.feedforward.u_ff3",digits:6},
-    {label:"FF effectif",path:"analysis.feedforward.u_ff_effective",digits:6},
-    {label:"FF2 gelé",path:"analysis.feedforward.ff2_frozen"},
-    {label:"Raison gel FF2",path:"analysis.feedforward.ff2_freeze_reason"},
-    {label:"Observateur stationnaire",path:"feedforward.fftrim.stationary.state"},
-    {label:"Rejet stationnaire",path:"feedforward.fftrim.stationary.last_reject_reason"},
-    {label:"Observateur périodique",path:"feedforward.fftrim.periodic.state"},
-    {label:"Rejet périodique",path:"feedforward.fftrim.periodic.last_reject_reason"},
-    {label:"Transfert FFTrim",path:"feedforward.fftrim.transfer.state"},
-    {label:"Motif transfert",path:"feedforward.fftrim.transfer.reason"},
+    {label:N_("FF effectif"),path:"analysis.feedforward.u_ff_effective",digits:6},
+    {label:N_("FF2 gelé"),path:"analysis.feedforward.ff2_frozen"},
+    {label:N_("Raison gel FF2"),path:"analysis.feedforward.ff2_freeze_reason"},
+    {label:N_("Observateur stationnaire"),path:"feedforward.fftrim.stationary.state"},
+    {label:N_("Rejet stationnaire"),path:"feedforward.fftrim.stationary.last_reject_reason"},
+    {label:N_("Observateur périodique"),path:"feedforward.fftrim.periodic.state"},
+    {label:N_("Rejet périodique"),path:"feedforward.fftrim.periodic.last_reject_reason"},
+    {label:N_("Transfert FFTrim"),path:"feedforward.fftrim.transfer.state"},
+    {label:N_("Motif transfert"),path:"feedforward.fftrim.transfer.reason"},
   ]},
-  {title: "Thermal Twin", note: "Une prédiction doit avoir son propre drapeau de fiabilité.", fields: [
-    {label:"État Twin",path:"feedforward.twin_status"},
-    {label:"Modèle Twin fiable",path:"analysis.twin.twin_model_reliable"},
-    {label:"Température estimée",path:"analysis.twin.twin_T_hat",unit:" °C"},
-    {label:"Température prédite",path:"analysis.twin.twin_T_pred",unit:" °C"},
-    {label:"Innovation",path:"analysis.twin.twin_innovation",unit:" °C",digits:4},
-    {label:"RMSE de l’innovation · EMA",path:"analysis.twin.twin_rmse_30",unit:" °C",digits:4},
-    {label:"Équilibre estimé",path:"analysis.twin.twin_T_steady",unit:" °C",reliable:"analysis.twin.twin_T_steady_reliable"},
-    {label:"Fiabilité équilibre",path:"analysis.twin.twin_T_steady_reliable"},
-    {label:"Consigne atteignable (prédiction)",path:"analysis.twin.twin_setpoint_reachable",reliable:"analysis.twin.twin_T_steady_reliable"},
+  {title: N_("Thermal Twin"), note: N_("Une prédiction doit avoir son propre drapeau de fiabilité."), fields: [
+    {label:N_("État Twin"),path:"feedforward.twin_status"},
+    {label:N_("Modèle Twin fiable"),path:"analysis.twin.twin_model_reliable"},
+    {label:N_("Température estimée"),path:"analysis.twin.twin_T_hat",unit:" °C"},
+    {label:N_("Température prédite"),path:"analysis.twin.twin_T_pred",unit:" °C"},
+    {label:N_("Innovation"),path:"analysis.twin.twin_innovation",unit:" °C",digits:4},
+    {label:N_("RMSE de l’innovation · EMA"),path:"analysis.twin.twin_rmse_30",unit:" °C",digits:4},
+    {label:N_("Équilibre estimé"),path:"analysis.twin.twin_T_steady",unit:" °C",reliable:"analysis.twin.twin_T_steady_reliable"},
+    {label:N_("Fiabilité équilibre"),path:"analysis.twin.twin_T_steady_reliable"},
+    {label:N_("Consigne atteignable (prédiction)"),path:"analysis.twin.twin_setpoint_reachable",reliable:"analysis.twin.twin_T_steady_reliable"},
     {label:"ETA",path:"analysis.twin.eta_s",unit:" s",digits:0},
-    {label:"Motif ETA",path:"analysis.twin.eta_reason"},
+    {label:N_("Motif ETA"),path:"analysis.twin.eta_reason"},
   ]},
-  {title: "Consigne, trajectoire, calibration", note: "Les états internes restent affichés sans action de pilotage.", fields: [
-    {label:"Consigne filtrée",path:"setpoint.filtered_setpoint",unit:" °C"},
-    {label:"Trajectoire active",path:"setpoint.trajectory_active"},
-    {label:"Source de trajectoire",path:"setpoint.trajectory_source"},
+  {title: N_("Consigne, trajectoire, calibration"), note: N_("Les états internes restent affichés sans action de pilotage."), fields: [
+    {label:N_("Consigne filtrée"),path:"setpoint.filtered_setpoint",unit:" °C"},
+    {label:N_("Trajectoire active"),path:"setpoint.trajectory_active"},
+    {label:N_("Source de trajectoire"),path:"setpoint.trajectory_source"},
     {label:"Boost",path:"setpoint.boost_active"},
-    {label:"Phase trajectoire",path:"analysis.trajectory.phase"},
-    {label:"Freinage nécessaire",path:"analysis.trajectory.braking_needed"},
-    {label:"Autocalibration",path:"autocalib.state"},
-    {label:"Modèle dégradé",path:"autocalib.model_degraded"},
-    {label:"État de calibration",path:"calibration.state"},
-    {label:"Tentatives",path:"calibration.retry_count",digits:0},
+    {label:N_("Phase trajectoire"),path:"analysis.trajectory.phase"},
+    {label:N_("Freinage nécessaire"),path:"analysis.trajectory.braking_needed"},
+    {label:N_("Autocalibration"),path:"autocalib.state"},
+    {label:N_("Modèle dégradé"),path:"autocalib.model_degraded"},
+    {label:N_("État de calibration"),path:"calibration.state"},
+    {label:N_("Tentatives"),path:"calibration.retry_count",digits:0},
   ]},
 ];
 
@@ -136,6 +137,7 @@ export class SmartPIDashboardPanel extends LitElement {
   connectedCallback(){super.connectedCallback();this.freshnessTimer=setInterval(()=>this.requestUpdate(),30_000);}
 
   protected willUpdate(changed: Map<string, unknown>) {
+    if(changed.has("hass") && this.hass) setLanguage(this.hass.locale?.language ?? this.hass.language);
     if(changed.has("hass") && this.hass) this.sessionHistory.collect(discover(this.hass), this.hass.states,Date.now()/1000,this.hass.config?.unit_system?.temperature);
   }
   disconnectedCallback(){clearInterval(this.freshnessTimer);this.freshnessTimer=undefined;this.sessionHistory.clear();super.disconnectedCallback();}
@@ -155,7 +157,7 @@ export class SmartPIDashboardPanel extends LitElement {
 
   private field(f: Field, live: Record<string, unknown>, unit: string) {
     const value = display(reliableValue(live, f.path, f.reliable), (f.unit ?? "").replace("°C",unit), f.digits ?? 2);
-    return html`<div class="detail" title=${f.path}><span>${f.label}</span><strong>${value}</strong></div>`;
+    return html`<div class="detail" title=${f.path}><span>${tr(f.label)}</span><strong>${value}</strong></div>`;
   }
 
   private showDiagnostic(d: SmartPIDiagnostic) {
@@ -174,69 +176,65 @@ export class SmartPIDashboardPanel extends LitElement {
               const valid = count !== null && count >= 0 && target !== null && target > 0;
               const percent = valid ? Math.min(100, 100 * count / target) : null;
               return html`<div>
-                <div class="flex spread"><strong>${key.toUpperCase()} · ${key === "a" ? "chauffe" : "pertes thermiques"}</strong>
+                <div class="flex spread"><strong>${key.toUpperCase()} · ${key === "a" ? "chauffe" : tr("pertes thermiques")}</strong>
                   <span>${display(percent, " %", 0)}</span></div>
-                ${monitoring ? nothing : html`<progress aria-label=${`Historique de ${key.toUpperCase()}`}
+                ${monitoring ? nothing : html`<progress aria-label=${tr("Historique de {0}", key.toUpperCase())}
                   max=${target ?? 1} value=${valid ? Math.min(count, target) : nothing}></progress>`}
-                <p class="muted small">${display(count, "", 0)} / ${display(target, "", 0)} mesures conservées
-                  · premier palier ${display(initial, "", 0)}
-                  ${count !== null && initial !== null ? (count >= initial ? "atteint" : "en cours") : ""}</p>
-                <p class="muted small">Mises à jour acceptées · ${display(at(v, `learning.accepted_updates_${key}`), "", 0)}</p>
+                <p class="muted small">${display(count, "", 0)} / ${display(target, "", 0)} ${tr("mesures conservées · premier palier")} ${display(initial, "", 0)}
+                  ${count !== null && initial !== null ? (count >= initial ? "atteint" : tr("en cours")) : ""}</p>
+                <p class="muted small">${tr("Mises à jour acceptées")} · ${display(at(v, `learning.accepted_updates_${key}`), "", 0)}</p>
               </div>`;
             })}
           </div>
-          <p class="muted small">Les pourcentages décrivent le remplissage de l’historique.
-            Confiance publiée · ${display(at(v, "model.confidence"))}
-            · τ fiable · ${display(at(v, "model.tau_reliable"))}</p>
+          <p class="muted small">${tr("Les pourcentages décrivent le remplissage de l’historique. Confiance publiée")} · ${display(at(v, "model.confidence"))}
+            · ${tr("τ fiable")} · ${display(at(v, "model.tau_reliable"))}</p>
           <div class="columns">
             ${(["heat", "cool"] as const).map((direction) => {
               const reliable = at(v, `model.deadtime_${direction}_reliable`);
-              return html`<div><strong>Temps mort · ${direction === "heat" ? "chauffe" : "refroidissement"}</strong>
+              return html`<div><strong>${tr("Temps mort")} · ${direction === "heat" ? "chauffe" : "refroidissement"}</strong>
                 <p>${reliable === true
                   ? display(at(v, `model.deadtime_${direction}_s`), " s", 0)
-                  : reliable === false ? "En attente d’une mesure fiable" : "Indisponible"}</p>
-                <p class="muted small">Dernière issue · ${display(at(v, `analysis.deadtime.${direction}_last_outcome`))}</p></div>`;
+                  : reliable === false ? tr("En attente d’une mesure fiable") : tr("Indisponible")}</p>
+                <p class="muted small">${tr("Dernière issue")} · ${display(at(v, `analysis.deadtime.${direction}_last_outcome`))}</p></div>`;
             })}
           </div>
-          ${bootstrap ? html`<p><strong>Prochaine étape</strong> ·
+          ${bootstrap ? html`<p><strong>${tr("Prochaine étape")}</strong> ·
             ${String(at(v, "learning.bootstrap_status")).includes("waiting response lag")
-              ? "Les premières mesures sont collectées. SmartPI attend de résoudre le délai de réponse."
+              ? tr("Les premières mesures sont collectées. SmartPI attend de résoudre le délai de réponse.")
               : at(v, "model.deadtime_heat_reliable") === false || at(v, "model.deadtime_cool_reliable") === false
-                ? "Acquérir les temps morts encore en attente pour débloquer les observations correspondantes."
-                : "Collecter les premières mesures A et B acceptables par SmartPI."}</p>` : nothing}
-          ${bootstrap ? html`<p><strong>Étape initiale</strong> · ${display(at(v, "learning.bootstrap_status"))}</p>` : nothing}
-          ${at(v, "learning.enabled") === false ? html`<p>Apprentissage désactivé selon SmartPI.</p>` : nothing}
-          <p>Détection en cours · ${display(at(v, "analysis.deadtime.state"))}
-            · attente écoulée ${display(at(v, "analysis.deadtime.waiting_elapsed_s"), " s", 0)}</p>
-          <p>Délai de réponse · ${display(at(v, "analysis.learning.response_lag.lag_s"), " s", 0)}
-            · épisodes ${display(at(v, "analysis.learning.response_lag.episodes"), "", 0)}</p>
-          <p class="muted small">Motif d’apprentissage · ${display(at(v, "learning.last_reason"))}
-            · motif du délai · ${display(at(v, "analysis.learning.response_lag.last_reason"))}</p>
-          <p class="muted small">Si les compteurs restent à zéro, les états et motifs ci-dessus
-            décrivent la dernière situation publiée. Une nouvelle mesure dépend d’une
-            observation exploitable acceptée par SmartPI.</p>
+                ? tr("Acquérir les temps morts encore en attente pour débloquer les observations correspondantes.")
+                : tr("Collecter les premières mesures A et B acceptables par SmartPI.")}</p>` : nothing}
+          ${bootstrap ? html`<p><strong>${tr("Étape initiale")}</strong> · ${display(at(v, "learning.bootstrap_status"))}</p>` : nothing}
+          ${at(v, "learning.enabled") === false ? html`<p>${tr("Apprentissage désactivé selon SmartPI.")}</p>` : nothing}
+          <p>${tr("Détection en cours")} · ${display(at(v, "analysis.deadtime.state"))}
+            · ${tr("attente écoulée")} ${display(at(v, "analysis.deadtime.waiting_elapsed_s"), " s", 0)}</p>
+          <p>${tr("Délai de réponse")} · ${display(at(v, "analysis.learning.response_lag.lag_s"), " s", 0)}
+            · ${tr("épisodes")} ${display(at(v, "analysis.learning.response_lag.episodes"), "", 0)}</p>
+          <p class="muted small">${tr("Motif d’apprentissage")} · ${display(at(v, "learning.last_reason"))}
+            · ${tr("motif du délai")} · ${display(at(v, "analysis.learning.response_lag.last_reason"))}</p>
+          <p class="muted small">${tr("Si les compteurs restent à zéro, les états et motifs ci-dessus décrivent la dernière situation publiée. Une nouvelle mesure dépend d’une observation exploitable acceptée par SmartPI.")}</p>
 `;
     const publication = timestamp(d.lastUpdated);
     return html`
       <section class="hero">
         <div class="flex spread">
-          <div><div class="eyebrow">THERMOSTAT SÉLECTIONNÉ</div><h2>${d.name}</h2>
+          <div><div class="eyebrow">${tr("THERMOSTAT SÉLECTIONNÉ")}</div><h2>${d.name}</h2>
             <div class="muted small">${d.climateId ?? d.entityId}</div></div>
-          <span class="tag">${bootstrap?"Apprentissage / hystérésis":display(at(v,"control.phase"))}</span>
+          <span class="tag">${bootstrap?tr("Apprentissage / hystérésis"):display(at(v,"control.phase"))}</span>
         </div>
-        <p class="muted small">Dernière publication ${publication === null ? "indisponible" : html`<time datetime=${d.lastUpdated ?? ""}>${publicationFormat.format(publication * 1000)}</time>`}</p>
+        <p class="muted small">${tr("Dernière publication")} ${publication === null ? tr("indisponible") : html`<time datetime=${d.lastUpdated ?? ""}>${publicationFormat().format(publication * 1000)}</time>`}</p>
         <smartpi-thermal-journey .hass=${this.hass} .diagnostic=${d}
           @observatory-refresh=${(event: CustomEvent<{entityId: string}>) => {if (event.detail.entityId === d.entityId) void this.renderRoot.querySelector<ObservatoryElement>("smartpi-observatory")?.refresh();}}></smartpi-thermal-journey>
         <smartpi-explanations mode="maintenance" .diagnostic=${d} .now=${Date.now()/1000}></smartpi-explanations>
         <div class="metrics">
-          ${this.metric("Commande appliquée",at(v,"power.applied_percent")," %",1,d.lastUpdated ?? "")}
-          ${this.metric("Température extérieure",at(v,"temperature.outdoor"),new ThermalJourney(this.hass,d).unit ?? "",2,d.lastUpdated ?? "")}
+          ${this.metric(tr("Commande appliquée"),at(v,"power.applied_percent")," %",1,d.lastUpdated ?? "")}
+          ${this.metric(tr("Température extérieure"),at(v,"temperature.outdoor"),new ThermalJourney(this.hass,d).unit ?? "",2,d.lastUpdated ?? "")}
         </div>
-        <section class="learn" aria-label="Avancement de l’apprentissage">
-          <div class="flex spread"><h3>${monitoring ? "Surveillance du modèle" : "Apprentissage du modèle"}</h3>
-            <strong>${display(({bootstrap:"Initialisation", learning:"Collecte du modèle", monitoring:"Surveillance", degraded:"Modèle à consolider"} as Record<string,string>)[String(at(v, "learning.stage"))] ?? at(v, "learning.stage"))}</strong></div>
-          ${monitoring ? html`<p class="muted small">Collecte initiale achevée · le modèle reste sous surveillance.</p>
-            <details class="learning-details"><summary>Mesures, fiabilité et motifs <span class="chevron" aria-hidden="true">⌄</span></summary>${learningDetails}</details>` : learningDetails}
+        <section class="learn" aria-label="${tr("Avancement de l’apprentissage")}">
+          <div class="flex spread"><h3>${monitoring ? tr("Surveillance du modèle") : tr("Apprentissage du modèle")}</h3>
+            <strong>${display(({bootstrap:tr("Initialisation"), learning:tr("Collecte du modèle"), monitoring:tr("Surveillance"), degraded:tr("Modèle à consolider")} as Record<string,string>)[String(at(v, "learning.stage"))] ?? at(v, "learning.stage"))}</strong></div>
+          ${monitoring ? html`<p class="muted small">${tr("Collecte initiale achevée · le modèle reste sous surveillance.")}</p>
+            <details class="learning-details"><summary>${tr("Mesures, fiabilité et motifs")} <span class="chevron" aria-hidden="true">⌄</span></summary>${learningDetails}</details>` : learningDetails}
         </section>
       </section>
       <smartpi-observatory .hass=${this.hass} .diagnostic=${d}
@@ -247,17 +245,17 @@ export class SmartPIDashboardPanel extends LitElement {
           if (journey) void journey.previewTemperature(event.detail.value).then(prepared => {if (prepared) journey.scrollIntoView({block: "center"});});
         }}></smartpi-observatory>
       <smartpi-visual-diagnostics .hass=${this.hass} .diagnostic=${d} .session=${this.sessionHistory.get(d.entityId)} .observations=${this.observationData?.entityId===d.entityId ? this.observationData.points : []} .observationError=${this.observationData?.entityId===d.entityId ? this.observationData.error : ""}></smartpi-visual-diagnostics>
-      <details class="surface technical"><summary>Diagnostics techniques complets</summary>
-      <section><h3>Comprendre la situation</h3><ul>${notes.map(s=>html`<li>${s}</li>`)}</ul></section>
-      <div class="subhead"><h2>Diagnostics techniques</h2><span class="muted small">Déplier pour comprendre les détails</span></div>
+      <details class="surface technical"><summary>${tr("Diagnostics techniques complets")}</summary>
+      <section><h3>${tr("Comprendre la situation")}</h3><ul>${notes.map(s=>html`<li>${s}</li>`)}</ul></section>
+      <div class="subhead"><h2>${tr("Diagnostics techniques")}</h2><span class="muted small">${tr("Déplier pour comprendre les détails")}</span></div>
       <div class="details-list">
         ${sections.map(s=>html`<details class="surface">
-          <summary>${s.title}<span class="chevron">⌄</span></summary>
-          <p class="muted small">${s.note}</p>
-          <div class="detail-grid">${s.fields.map(f=>this.field(f,v,d.temperatureUnit ?? "unité source"))}</div>
+          <summary>${tr(s.title)}<span class="chevron">⌄</span></summary>
+          <p class="muted small">${tr(s.note)}</p>
+          <div class="detail-grid">${s.fields.map(f=>this.field(f,v,d.temperatureUnit ?? tr("unité source")))}</div>
         </details>`)}
       </div>
-      <details class="surface raw"><summary>Diagnostic brut JSON <span class="chevron">⌄</span></summary>
+      <details class="surface raw"><summary>${tr("Diagnostic brut JSON")} <span class="chevron">⌄</span></summary>
         <pre>${JSON.stringify({schema_version:2,state:d.state,live:d.live,history:d.history},null,2)}</pre>
       </details>
       </details>
@@ -267,10 +265,10 @@ export class SmartPIDashboardPanel extends LitElement {
   private thermostatTile(d: SmartPIDiagnostic, selected: boolean) {
     const journey = new ThermalJourney(this.hass, d);
     const mode = journey.available ? journey.climate!.state === "off" ? "off" : journey.attributes.preset_mode : undefined;
-    const modes: Record<string, string> = {frost:"Hors gel", eco:"Éco", comfort:"Confort", boost:"Boost", off:"Arrêt", none:"Manuel", activity:"Activité"};
+    const modes: Record<string, string> = {frost:tr("Hors gel"), eco:tr("Éco"), comfort:tr("Confort"), boost:"Boost", off:tr("Arrêt"), none:tr("Manuel"), activity:tr("Activité")};
     const knownMode = typeof mode === "string" && Object.hasOwn(modes, mode);
     const tone = knownMode ? mode : "unknown";
-    const label = knownMode ? modes[mode] : typeof mode === "string" && mode.trim() ? mode : "Mode indisponible";
+    const label = knownMode ? modes[mode] : typeof mode === "string" && mode.trim() ? mode : tr("Mode indisponible");
     const effort = journey.appliedEffort();
     const published = timestamp(d.lastUpdated);
     const stale = published !== null && Date.now() / 1000 - published > 600;
@@ -280,11 +278,11 @@ export class SmartPIDashboardPanel extends LitElement {
       <strong class="tile-name">${d.name}</strong>
       <span class="tile-mode">${label}<span class="tile-check" aria-hidden="true">${selected ? "✓" : ""}</span></span>
       <span class="big">${display(journey.measured, journey.unit ? " " + journey.unit : "")}</span>
-      <span class="tile-target" title=${"Thermostat · " + (journey.climate?.last_updated ?? "Date absente")}>Consigne <b>${display(journey.target, journey.unit ? " " + journey.unit : "")}</b></span>
-      <span class="tile-bottom" title=${"SmartPI · " + (d.lastUpdated ?? "Date absente")}>Filtrée ${display(journey.filtered, journey.unit ? " " + journey.unit : "")}</span>
-      <span class="tile-command">Commande <b>${effort ? display(effort.percent, " %", 1) : "—"}</b></span>
+      <span class="tile-target" title=${tr("Thermostat · ") + (journey.climate?.last_updated ?? tr("Date absente"))}>${tr("Consigne")} <b>${display(journey.target, journey.unit ? " " + journey.unit : "")}</b></span>
+      <span class="tile-bottom" title=${tr("SmartPI · ") + (d.lastUpdated ?? tr("Date absente"))}>${tr("Filtrée")} ${display(journey.filtered, journey.unit ? " " + journey.unit : "")}</span>
+      <span class="tile-command">${tr("Commande")} <b>${effort ? display(effort.percent, " %", 1) : "—"}</b></span>
       <smartpi-publication-quality .now=${Date.now()/1000} .value=${journey.measured} .date=${d.lastUpdated ?? ""} .available=${d.available}></smartpi-publication-quality>
-      ${!effort ? html`<span class="tile-status">${!d.available ? "Diagnostic indisponible" : stale ? "Publication ancienne" : "Commande indisponible"}</span>` : nothing}
+      ${!effort ? html`<span class="tile-status">${!d.available ? tr("Diagnostic indisponible") : stale ? tr("Publication ancienne") : tr("Commande indisponible")}</span>` : nothing}
     </button>`;
   }
 
@@ -292,18 +290,18 @@ export class SmartPIDashboardPanel extends LitElement {
     const list=discover(this.hass);
     const selected=list.find(d=>d.entityId===this.selectedId)??list[0];
     return html`<div class="header"><ha-menu-button .hass=${this.hass} .narrow=${this.narrow}></ha-menu-button>
-       <div class="head-text"><h1>SmartPI Dashboard</h1><span>Comprendre la régulation thermique</span></div>
-       <span class="tag readonly">Température & supervision</span></div>
+       <div class="head-text"><h1>SmartPI Dashboard</h1><span>${tr("Comprendre la régulation thermique")}</span></div>
+       <span class="tag readonly">${tr("Température & supervision")}</span></div>
       <main>
-        <div class="flex spread intro"><h2>Mes thermostats</h2>
-          <span class="muted small">${list.length} diagnostic${list.length>1?"s":""} SmartPI v2</span></div>
-        ${list.length===0 ? html`<section class="surface empty"><h3>Aucun diagnostic SmartPI v2 détecté</h3>
-          <p>Rechercher les capteurs sensor.* dotés de schema_version=2 et des objets live/history dans les outils de développement de Home Assistant.</p></section>`:
+        <div class="flex spread intro"><h2>${tr("Mes thermostats")}</h2>
+          <span class="muted small">${list.length} ${tr("diagnostic")}${list.length>1?"s":""} SmartPI v2</span></div>
+        ${list.length===0 ? html`<section class="surface empty"><h3>${tr("Aucun diagnostic SmartPI v2 détecté")}</h3>
+          <p>${tr("Rechercher les capteurs sensor.* dotés de schema_version=2 et des objets live/history dans les outils de développement de Home Assistant.")}</p></section>`:
           html`<div class="tiles">${list.map(d => this.thermostatTile(d, selected?.entityId === d.entityId))}</div>
           <smartpi-room-comparison .rooms=${list.map(d=>({id:d.entityId,name:d.name,unit:new ThermalJourney(this.hass,d).unit,samples:this.sessionHistory.get(d.entityId)}))} .end=${Date.now()/1000}></smartpi-room-comparison>
           ${selected?this.showDiagnostic(selected):nothing}`}
         <smartpi-orphan-notebooks .hass=${this.hass} @observatory-recovery=${() => void this.renderRoot.querySelector<ObservatoryElement>("smartpi-observatory")?.refresh()}></smartpi-orphan-notebooks>
-        <footer>Source : capteurs SmartPI Diagnostics v2 · Réglage de température et de preset sur sélection explicite</footer>
+        <footer>${tr("Source : capteurs SmartPI Diagnostics v2 · Réglage de température et de preset sur sélection explicite")}</footer>
       </main>`;
   }
 

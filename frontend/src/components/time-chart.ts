@@ -4,6 +4,7 @@ import uPlot from "uplot";
 import plotCSS from "uplot/dist/uPlot.min.css";
 import { sameSampleContext, valueAt, type LearningMark, type Sample } from "../utils/timeseries";
 import {commandPair, DiagnosticProjection} from "../utils/diagnostic-projection";
+import {tr, locale} from "../i18n";
 export interface Curve {
   label: string;
   path: string;
@@ -271,9 +272,9 @@ export class TimeChart extends LitElement {
         ],
         series: [
           {
-            label: "Date",
+            label: tr("Date"),
             value: (_u, v) =>
-              v == null ? "—" : new Date(v * 1000).toLocaleString(),
+              v == null ? "—" : new Date(v * 1000).toLocaleString(locale()),
           },
           ...this.curves.map((c) => ({
             label: c.label,
@@ -301,7 +302,7 @@ export class TimeChart extends LitElement {
             points: { show: this.samples.length < 3 },
             value: (_u: uPlot, v: number) =>
               v == null
-                ? "Indisponible"
+                ? tr("Indisponible")
                 : `${v.toLocaleString(undefined, { maximumFractionDigits: c.unit.includes("min") ? 6 : 3 })} ${c.unit}`,
           })),
         ],
@@ -400,7 +401,7 @@ export class TimeChart extends LitElement {
     const publication = selected ?? visible.at(-1);
     const showLatest = !selected;
     return html`<h3>${this.heading}</h3>
-      <div class="series-controls" role="group" aria-label="Séries affichées">
+      <div class="series-controls" role="group" aria-label="${tr("Séries affichées")}">
         ${this.curves.map(
           (c, i) =>
             html`<button
@@ -425,29 +426,29 @@ export class TimeChart extends LitElement {
           if (time !== undefined) this.inspect(time);
         } }}></div>
       <slot name="context-bars"></slot>
-      ${publication ? html`<div class="publication-values" aria-label="Valeurs de la publication">
-        <div class="publication-date">${showLatest ? "Dernière publication de la fenêtre" : "Publication sélectionnée"}
-          · <time datetime=${new Date(publication.time * 1000).toISOString()}>${new Date(publication.time * 1000).toLocaleString()}</time>
-          ${!showLatest ? html`<button type="button" @click=${() => {if (this.inspectable) this.inspect(visible.at(-1)!.time); else this.legendTime = null;}}>Dernière publication</button>` : ""}</div>
+      ${publication ? html`<div class="publication-values" aria-label="${tr("Valeurs de la publication")}">
+        <div class="publication-date">${showLatest ? tr("Dernière publication de la fenêtre") : tr("Publication sélectionnée")}
+          · <time datetime=${new Date(publication.time * 1000).toISOString()}>${new Date(publication.time * 1000).toLocaleString(locale())}</time>
+          ${!showLatest ? html`<button type="button" @click=${() => {if (this.inspectable) this.inspect(visible.at(-1)!.time); else this.legendTime = null;}}>${tr("Dernière publication")}</button>` : ""}</div>
         <dl>${this.curves.map(c => {
           const value = this.seriesValue(publication, c);
           return html`<div class=${this.hiddenCurves.has(c.label) ? "series-muted" : ""}>
             <dt><span style=${"background:" + c.color} aria-hidden="true"></span>${c.label}</dt>
-            <dd>${value === null ? "Absente à cet instant" : value.toLocaleString(undefined, {maximumFractionDigits: 3}) + " " + c.unit}</dd>
+            <dd>${value === null ? tr("Absente à cet instant") : value.toLocaleString(undefined, {maximumFractionDigits: 3}) + " " + c.unit}</dd>
           </div>`;
         })}</dl>
-      </div>` : html`<p>Aucune publication dans cette fenêtre.</p>`}
+      </div>` : html`<p>${tr("Aucune publication dans cette fenêtre.")}</p>`}
       ${!count
-        ? html`<p>Aucune valeur disponible pour cette fenêtre.</p>`
+        ? html`<p>${tr("Aucune valeur disponible pour cette fenêtre.")}</p>`
         : html`<details>
             <summary>
-              Table de données accessible · ${count} publications
+              ${tr("Table de données accessible")} · ${count} ${tr("publications")}
             </summary>
             <div class="table">
               <table>
                 <thead>
                   <tr>
-                    <th>Date locale</th>
+                    <th>${tr("Date locale")}</th>
                     ${this.curves.map(
                       (c) => html`<th>${c.label} (${c.unit})</th>`,
                     )}
@@ -459,12 +460,12 @@ export class TimeChart extends LitElement {
                       html`<tr>
                         <td>${this.inspectable
                           ? html`<button type="button" aria-pressed=${s.time === this.selectedTime}
-                              @click=${() => this.inspect(s.time)}>${new Date(s.time * 1000).toLocaleString()}</button>`
-                          : new Date(s.time * 1000).toLocaleString()}</td>
+                              @click=${() => this.inspect(s.time)}>${new Date(s.time * 1000).toLocaleString(locale())}</button>`
+                          : new Date(s.time * 1000).toLocaleString(locale())}</td>
                         ${this.curves.map(
                           (c) =>
                             html`<td>
-                              ${this.seriesValue(s, c) ?? "Indisponible"}
+                              ${this.seriesValue(s, c) ?? tr("Indisponible")}
                             </td>`,
                         )}
                       </tr>`,
@@ -473,8 +474,7 @@ export class TimeChart extends LitElement {
               </table>
             </div>
             <p>
-              200 dernières publications maximum dans la table ; courbe
-              complète.
+              ${tr("200 dernières publications maximum dans la table ; courbe complète.")}
             </p>
           </details>`}`;
   }

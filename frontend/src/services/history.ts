@@ -1,5 +1,6 @@
 import { decodeRows, normalize, type Sample } from "../utils/timeseries";
 import { record } from "../adapter";
+import {tr} from "../i18n";
 export interface HistoryConnection {
   callWS<T>(message: {
     type: "history/history_during_period";
@@ -27,10 +28,10 @@ export async function readHistory(
     end <= start ||
     end - start > 48 * 3600
   )
-    throw new Error("Fenêtre historique invalide.");
+    throw new Error(tr("Fenêtre historique invalide."));
   const all: Sample[] = [];
   for (let from = start; from < end; from += 12 * 3600) {
-    if (cancelled()) throw new Error("Lecture annulée.");
+    if (cancelled()) throw new Error(tr("Lecture annulée."));
     const to = Math.min(end, from + 12 * 3600);
     const response = await hass.callWS<unknown>({
       type: "history/history_during_period",
@@ -43,12 +44,12 @@ export async function readHistory(
       no_attributes: false,
     });
     if (!record(response))
-      throw new Error("Format de réponse Recorder non reconnu.");
+      throw new Error(tr("Format de réponse Recorder non reconnu."));
     const rows = decodeRows(response[entityId] ?? []);
     all.push(...rows.filter((s) => s.time >= from && s.time <= to));
     if (all.length > 100000)
       throw new Error(
-        "Volume historique trop important ; utiliser l’historique de session.",
+        tr("Volume historique trop important ; utiliser l’historique de session."),
       );
   }
   return normalize(all);

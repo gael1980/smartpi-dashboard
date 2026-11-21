@@ -19,55 +19,60 @@ import "./control-diagram";
 import "./command-chain";
 import "./diagnostic-projection";
 import type { Curve, TimeChart } from "./time-chart";
-const temp: Curve[] = [
-  {
-    label: "Intérieure mesurée",
-    path: "temperature.indoor",
-    color: "#2689ca",
-    unit: "°C",
-  },
-  {
-    label: "Consigne filtrée",
-    path: "setpoint.filtered_setpoint",
-    color: "#d6892e",
-    unit: "°C",
-    step: true,
-  },
-];
-const learningTemp = temp.map((curve) => curve.step ? { ...curve, dash: [6, 4] } : curve);
+import {tr, numberFormat, perLanguage, locale} from "../i18n";
+// Curve labels are translated once per language; identities stay stable for comparisons.
+const curveSets = perLanguage(() => {
+  const temp: Curve[] = [
+    {
+      label: tr("Intérieure mesurée"),
+      path: "temperature.indoor",
+      color: "#2689ca",
+      unit: "°C",
+    },
+    {
+      label: tr("Consigne filtrée"),
+      path: "setpoint.filtered_setpoint",
+      color: "#d6892e",
+      unit: "°C",
+      step: true,
+    },
+  ];
+  const learningTemp = temp.map((curve) => curve.step ? { ...curve, dash: [6, 4] } : curve);
+  const power: Curve[] = [
+    {
+      label: tr("Appliquée"),
+      path: "power.applied_percent",
+      color: "#2689ca",
+      unit: "%",
+      step: true,
+    },
+    {
+      label: tr("Demandée"),
+      path: "power.command_percent",
+      color: "#d6892e",
+      unit: "%",
+      step: true,
+    },
+    {
+      label: "PI",
+      path: "power.pi_percent",
+      color: "#9d78bd",
+      unit: "%",
+      step: true,
+    },
+    {
+      label: "FF",
+      path: "power.ff_percent",
+      color: "#39a38a",
+      unit: "%",
+      step: true,
+    },
+  ];
+  return {temp, learningTemp, power};
+});
 const learningKinds = ["A", "B", "Chauffe", "Refroidissement"] as const;
-const power: Curve[] = [
-  {
-    label: "Appliquée",
-    path: "power.applied_percent",
-    color: "#2689ca",
-    unit: "%",
-    step: true,
-  },
-  {
-    label: "Demandée",
-    path: "power.command_percent",
-    color: "#d6892e",
-    unit: "%",
-    step: true,
-  },
-  {
-    label: "PI",
-    path: "power.pi_percent",
-    color: "#9d78bd",
-    unit: "%",
-    step: true,
-  },
-  {
-    label: "FF",
-    path: "power.ff_percent",
-    color: "#39a38a",
-    unit: "%",
-    step: true,
-  },
-];
 
-const signedDegrees = new Intl.NumberFormat("fr-FR", {
+const signedDegrees = () => numberFormat({
   maximumFractionDigits: 2,
   signDisplay: "exceptZero",
 });
@@ -239,7 +244,7 @@ export class VisualDiagnostics extends LitElement {
     this.recorder = [];
     if (!d || !this.hass?.callWS) {
       this.error =
-        "Lecture Recorder non disponible dans cette connexion. Historique de session utilisé.";
+        tr("Lecture Recorder non disponible dans cette connexion. Historique de session utilisé.");
       this.loading = false;
       return;
     }
@@ -257,13 +262,13 @@ export class VisualDiagnostics extends LitElement {
       this.recorder = samples;
       if (!usable(samples))
         this.error =
-          "Recorder ne fournit aucune série v2 exploitable. Historique de session utilisé.";
+          tr("Recorder ne fournit aucune série v2 exploitable. Historique de session utilisé.");
     } catch (error) {
       if (generation !== this.generation) return;
       this.error =
         error instanceof Error && error.message.startsWith("Format")
           ? error.message
-          : "Lecture Recorder refusée ou impossible. Historique de session utilisé ; vérifier les droits et Recorder.";
+          : tr("Lecture Recorder refusée ou impossible. Historique de session utilisé ; vérifier les droits et Recorder.");
     } finally {
       if (generation === this.generation) this.loading = false;
     }
@@ -272,23 +277,23 @@ export class VisualDiagnostics extends LitElement {
     const { pairs, signedMedian, absoluteMedian, largestInterval } = tracking;
     return html`<section class="pane tracking" aria-labelledby="tracking-heading">
       <div class="tracking-title">
-        <h3 id="tracking-heading">Écart à la consigne filtrée</h3>
-        <span>Consigne filtrée − température intérieure</span>
+        <h3 id="tracking-heading">${tr("Écart à la consigne filtrée")}</h3>
+        <span>${tr("Consigne filtrée − température intérieure")}</span>
       </div>
       <dl class="metrics">
-        <div><dt>Couples valides</dt><dd>${pairs} / ${total}</dd></div>
-        <div><dt>Médiane signée</dt><dd>${signedMedian === null ? "Indisponible" : `${signedDegrees.format(signedMedian)} ${unit}`}</dd></div>
-        <div><dt>Médiane absolue</dt><dd>${display(absoluteMedian, " " + unit)}</dd></div>
-        <div><dt>Plus long intervalle entre couples</dt><dd>${display(largestInterval === null ? null : largestInterval / 60, " min", 1)}</dd></div>
+        <div><dt>${tr("Couples valides")}</dt><dd>${pairs} / ${total}</dd></div>
+        <div><dt>${tr("Médiane signée")}</dt><dd>${signedMedian === null ? tr("Indisponible") : `${signedDegrees().format(signedMedian)} ${unit}`}</dd></div>
+        <div><dt>${tr("Médiane absolue")}</dt><dd>${display(absoluteMedian, " " + unit)}</dd></div>
+        <div><dt>${tr("Plus long intervalle entre couples")}</dt><dd>${display(largestInterval === null ? null : largestInterval / 60, " min", 1)}</dd></div>
       </dl>
-      ${pairs >= 2 && signedMedian === null ? html`<p>Résumé indisponible : les couples traversent des unités ou des contextes enregistrés différents. Réduisez la période.</p>` : nothing}
+      ${pairs >= 2 && signedMedian === null ? html`<p>${tr("Résumé indisponible : les couples traversent des unités ou des contextes enregistrés différents. Réduisez la période.")}</p>` : nothing}
       <p>${pairs < 2
-        ? "Deux couples valides dans la fenêtre sont nécessaires pour résumer l’écart."
-        : "Un écart positif indique une température sous la consigne filtrée. La médiane absolue indique la taille typique de l’écart observé."}</p>
+        ? tr("Deux couples valides dans la fenêtre sont nécessaires pour résumer l’écart.")
+        : tr("Un écart positif indique une température sous la consigne filtrée. La médiane absolue indique la taille typique de l’écart observé.")}</p>
       <details>
-        <summary>Méthode et limites</summary>
-        <p>Chaque couple provient d’une même publication et compte une fois, indépendamment de l’intervalle entre les points. Les publications incomplètes sont exclues des médianes. Le plus long intervalle décrit l’espacement des couples valides.</p>
-        <p>Ces valeurs décrivent les publications de la source et de la fenêtre affichées. L’évaluation d’une durée de confort ou d’une réponse à un changement de consigne demande des données et un protocole adaptés.</p>
+        <summary>${tr("Méthode et limites")}</summary>
+        <p>${tr("Chaque couple provient d’une même publication et compte une fois, indépendamment de l’intervalle entre les points. Les publications incomplètes sont exclues des médianes. Le plus long intervalle décrit l’espacement des couples valides.")}</p>
+        <p>${tr("Ces valeurs décrivent les publications de la source et de la fenêtre affichées. L’évaluation d’une durée de confort ou d’une réponse à un changement de consigne demande des données et un protocole adaptés.")}</p>
       </details>
     </section>`;
   }
@@ -304,28 +309,28 @@ export class VisualDiagnostics extends LitElement {
       temperatureUnit: sample.unit ?? null,
     } : d;
     const route = new ControlPresentation(snapshot).route;
-    const source = sample ? (fromRecorder ? "Recorder" : "Session") : "Instantané SmartPI";
+    const source = sample ? (fromRecorder ? "Recorder" : "Session") : tr("Instantané SmartPI");
     const time = sample ? new Date(sample.time * 1000) : d.lastUpdated ? new Date(d.lastUpdated) : null;
     const format = (value: unknown, unit = "") =>
-      value == null && sample && snapshot.available ? "Non archivé" : display(value, unit.replace("°C",sample ? sample.unit ?? "unité source" : d.temperatureUnit ?? "unité source"));
+      value == null && sample && snapshot.available ? tr("Non archivé") : display(value, unit.replace("°C",sample ? sample.unit ?? tr("unité source") : d.temperatureUnit ?? tr("unité source")));
     const fields = [
-      ["Température intérieure mesurée", "temperature.indoor", " °C"],
-      ["Consigne filtrée", "setpoint.filtered_setpoint", " °C"],
-      ["Commande demandée", "power.command_percent", " %"],
-      ["Commande appliquée", "power.applied_percent", " %"],
+      [tr("Température intérieure mesurée"), "temperature.indoor", " °C"],
+      [tr("Consigne filtrée"), "setpoint.filtered_setpoint", " °C"],
+      [tr("Commande demandée"), "power.command_percent", " %"],
+      [tr("Commande appliquée"), "power.applied_percent", " %"],
     ];
     const block = this.block;
     const blockButton = (id: "pi" | "ff" | "model", label: string) =>
       html`<button type="button" aria-pressed=${block === id} aria-controls="block-detail"
         @click=${() => void this.inspectBlock(id)}>${label}</button>`;
     const path = route === "direct"
-      ? ["Consigne et mesure", "Hystérésis ou calibration", "Commande publiée", "Pièce"]
-      : ["Consigne et mesure", html`<span>Voies P et I</span> → ${blockButton("pi", "PI")}`,
-          html`+ ${blockButton("ff", "Anticipation")}`, "Limites et temporisation", "Commande publiée", "Pièce"];
+      ? [tr("Consigne et mesure"), tr("Hystérésis ou calibration"), tr("Commande publiée"), tr("Pièce")]
+      : [tr("Consigne et mesure"), html`<span>${tr("Voies P et I")}</span> → ${blockButton("pi", "PI")}`,
+          html`+ ${blockButton("ff", tr("Anticipation"))}`, tr("Limites et temporisation"), tr("Commande publiée"), tr("Pièce")];
     const blockFields = {
-      pi: [["Contribution PI", "power.pi_percent", " %"]],
-      ff: [["Anticipation retenue", "power.ff_percent", " %"]],
-      model: [["Gain thermique estimé A", "model.a", " °C/min/u"], ["Pertes estimées B", "model.b", " min⁻¹"]],
+      pi: [[tr("Contribution PI"), "power.pi_percent", " %"]],
+      ff: [[tr("Anticipation retenue"), "power.ff_percent", " %"]],
+      model: [[tr("Gain thermique estimé A"), "model.a", " °C/min/u"], [tr("Pertes estimées B"), "model.b", tr(" min⁻¹")]],
     } as const;
     const twinPath = "analysis.twin.twin_T_steady";
     const twin = at(snapshot.live, twinPath) == null
@@ -333,64 +338,65 @@ export class VisualDiagnostics extends LitElement {
       : format(reliableValue(snapshot.live, twinPath, "analysis.twin.twin_T_steady_reliable"), " °C");
     const historyDiagnostic = sample ? archivedDiagnostic(d,sample) : null;
     return html`${sample ? html`<section class="replay-bar">
-      <strong>Historique · ${source} · ${time?.toLocaleString()}</strong>
-      <label>Parcourir les publications <input aria-label="Publication historique" type="range" min="0" max=${Math.max(0,this.windowData(fromRecorder?this.recorder:this.session).samples.length-1)}
+      <strong>${tr("Historique")} · ${source} · ${time?.toLocaleString(locale())}</strong>
+      <label>${tr("Parcourir les publications")} <input aria-label="${tr("Publication historique")}" type="range" min="0" max=${Math.max(0,this.windowData(fromRecorder?this.recorder:this.session).samples.length-1)}
         .value=${String(this.windowData(fromRecorder?this.recorder:this.session).samples.findIndex(s=>s.time===sample.time))}
         @input=${(e:Event)=>{const sample=this.windowData(fromRecorder?this.recorder:this.session).samples[Number((e.target as HTMLInputElement).value)];if(sample)this.inspect(sample.time);}}></label>
-      <button type="button" aria-pressed=${this.replay} @click=${()=>{this.replay=!this.replay;}}>Schéma de cette publication</button>
-      <p>Uniquement les champs archivés. Consigne normale, fenêtre et mode HVAC non déduits de l’état actuel.</p>
+      <button type="button" aria-pressed=${this.replay} @click=${()=>{this.replay=!this.replay;}}>${tr("Schéma de cette publication")}</button>
+      <p>${tr("Uniquement les champs archivés. Consigne normale, fenêtre et mode HVAC non déduits de l’état actuel.")}</p>
       ${this.replay && historyDiagnostic ? html`<smartpi-control-diagram .historical=${true} .diagnostic=${historyDiagnostic} .expert=${this.expert}></smartpi-control-diagram>`:nothing}
     </section>`:nothing}<section class="synoptic" aria-labelledby="synoptic-title">
-        <h3 id="synoptic-title">Synoptique de régulation</h3>
-        <ol class="signal-path" aria-label=${route === "unavailable" ? "Schéma de référence" : "Voie déclarée"}>
+        <h3 id="synoptic-title">${tr("Synoptique de régulation")}</h3>
+        <ol class="signal-path" aria-label=${route === "unavailable" ? tr("Schéma de référence") : tr("Voie déclarée")}>
           ${path.map((label, i) => html`<li class=${route === "unavailable" ? "" : "active-path"}>
             ${i ? html`<span aria-hidden="true">${i === 2 && route !== "direct" ? "" : "→"}</span>` : nothing}
             ${label}</li>`)}
         </ol>
-        <p>${route === "pi" ? "Voie PI active" : route === "direct" ? "Voie directe déclarée" : "Chemin actif non vérifié"}</p>
-        <p>↶ Retour de la mesure · ${blockButton("model", "Modèle thermique")}</p>
+        <p>${route === "pi" ? tr("Voie PI active") : route === "direct" ? tr("Voie directe déclarée") : tr("Chemin actif non vérifié")}</p>
+        <p>${tr("↶ Retour de la mesure")} · ${blockButton("model", tr("Modèle thermique"))}</p>
       </section>
       <aside class="publication" aria-labelledby="inspection-title">
-        <h3 id="inspection-title" tabindex="-1">${sample ? "Publication sélectionnée" : "En direct"}</h3>
+        <h3 id="inspection-title" tabindex="-1">${sample ? tr("Publication sélectionnée") : tr("En direct")}</h3>
         <p role="status" class="inspection-status">
-          ${source} · ${sample?.observedAt ? "Observation de session" : "Publication"} ·
+          ${source} · ${sample?.observedAt ? tr("Observation de session") : tr("Publication")} ·
           ${time && Number.isFinite(time.valueOf())
-            ? html`<time datetime=${time.toISOString()}>${time.toLocaleString()}</time>`
-            : "Horodatage indisponible"}
+            ? html`<time datetime=${time.toISOString()}>${time.toLocaleString(locale())}</time>`
+            : tr("Horodatage indisponible")}
         </p>
         <dl>
-          <dt>État publié</dt><dd>${snapshot.state}</dd>
+          <dt>${tr("État publié")}</dt><dd>${snapshot.state}</dd>
           ${fields.map(([label, path, unit]) => html`<dt>${label}</dt>
             <dd>${format(sample ? valueAt(sample, path) : at(d.live, path), unit)}</dd>`)}
-          ${sample ? html`<dt>Écart à la consigne filtrée</dt><dd>${format(valueAt(sample, "error"), " °C")}</dd>` : nothing}
-          <dt>État de l’intégrale</dt><dd>${format(at(snapshot.live, "temperature.integral_mode"))}</dd>
-          <dt>Saturation déclarée</dt><dd>${format(at(snapshot.live, "control.saturation_state"))}</dd>
-          <dt>Limitation par temporisation</dt><dd>${format(at(snapshot.live, "analysis.control.forced_by_timing"))}</dd>
+          ${sample ? html`<dt>${tr("Écart à la consigne filtrée")}</dt><dd>${format(valueAt(sample, "error"), " °C")}</dd>` : nothing}
+          <dt>${tr("État de l’intégrale")}</dt><dd>${format(at(snapshot.live, "temperature.integral_mode"))}</dd>
+          <dt>${tr("Saturation déclarée")}</dt><dd>${format(at(snapshot.live, "control.saturation_state"))}</dd>
+          <dt>${tr("Limitation par temporisation")}</dt><dd>${format(at(snapshot.live, "analysis.control.forced_by_timing"))}</dd>
         </dl>
         <div id="block-detail">
           ${block ? html`<h4 id="block-title" tabindex="-1">
-              ${{ pi: "Détails PI", ff: "Détails anticipation", model: "Détails du modèle" }[block]}
+              ${{ pi: tr("Détails PI"), ff: tr("Détails anticipation"), model: tr("Détails du modèle") }[block]}
             </h4>
             <dl>${blockFields[block].map(([label, path, unit]) => html`<dt>${label}</dt>
               <dd>${format(sample ? valueAt(sample, path) : at(d.live, path), unit)}</dd>`)}
-              ${block === "pi" ? html`<dt>Erreur de la voie P</dt>
+              ${block === "pi" ? html`<dt>${tr("Erreur de la voie P")}</dt>
                 <dd>${format(at(snapshot.live, "analysis.control.error_p"), " °C")}</dd>
-                <dt>Erreur brute de la voie I</dt>
+                <dt>${tr("Erreur brute de la voie I")}</dt>
                 <dd>${format(at(snapshot.live, "temperature.error"), " °C")}</dd>` : nothing}
-              ${block === "ff" ? html`<dt>État FF3</dt>
+              ${block === "ff" ? html`<dt>${tr("État FF3")}</dt>
                 <dd>${format(at(snapshot.live, "feedforward.ff3_status"))}</dd>` : nothing}
-              ${block === "model" ? html`<dt>Équilibre estimé par le Twin</dt><dd>${twin}</dd>` : nothing}
+              ${block === "model" ? html`<dt>${tr("Équilibre estimé par le Twin")}</dt><dd>${twin}</dd>` : nothing}
             </dl>` : nothing}
         </div>
         <button type="button" aria-disabled=${!sample} @click=${() => { this.inspection = undefined; }}>
-          Revenir au direct
+          ${tr("Revenir au direct")}
         </button>
         <button type="button" @click=${() => this.renderRoot.querySelector<HTMLElement>("#journal-title")?.focus()}>
-          Voir le journal
+          ${tr("Voir le journal")}
         </button>
       </aside>`;
   }
   render() {
+    const {temp, learningTemp, power} = curveSets();
     const d = this.diagnostic;
     if (!d) return nothing;
     const fromRecorder = this.usingRecorder,
@@ -409,7 +415,7 @@ export class VisualDiagnostics extends LitElement {
     const chartUnit = archivedUnit(samples);
     const chart = (heading: string, curves: Curve[], percent = false, unitSensitive = curves.some(c=>c.unit.includes("°C"))) =>
       html`<section class=${percent ? "chart command-chart" : "chart"}>
-        ${unitSensitive && !compatibleSampleUnits(samples) ? html`<p role="status">Unités archivées différentes dans cette fenêtre. Réduisez la période pour comparer des valeurs de même unité.</p>` : nothing}
+        ${unitSensitive && !compatibleSampleUnits(samples) ? html`<p role="status">${tr("Unités archivées différentes dans cette fenêtre. Réduisez la période pour comparer des valeurs de même unité.")}</p>` : nothing}
         <smartpi-time-chart
           .heading=${heading}
           .marks=${learning && curves === learningTemp ? marks : []}
@@ -434,7 +440,7 @@ export class VisualDiagnostics extends LitElement {
     return html`<div class="workspace">
       <div class="top">
         <div>
-          <h2>Observatoire de la régulation</h2>
+          <h2>${tr("Observatoire de la régulation")}</h2>
           <span class="subtitle">${d.name}</span>
         </div>
         <label class="expert"
@@ -444,15 +450,15 @@ export class VisualDiagnostics extends LitElement {
             @change=${(e: Event) =>
               (this.expert = (e.target as HTMLInputElement).checked)}
           />
-          Mode expert</label
+          ${tr("Mode expert")}</label
         >
       </div>
-      <nav aria-label="Vues de diagnostic">
+      <nav aria-label="${tr("Vues de diagnostic")}">
         ${[
-          ["evolution", "Supervision"],
-          ["regulation", "Régulation en direct"],
-          ["model", "Santé du modèle"],
-          ["learning", "Apprentissage"],
+          ["evolution", tr("Supervision")],
+          ["regulation", tr("Régulation en direct")],
+          ["model", tr("Santé du modèle")],
+          ["learning", tr("Apprentissage")],
         ].map(
           ([id, label]) =>
             html`<button
@@ -464,9 +470,9 @@ export class VisualDiagnostics extends LitElement {
             </button>`,
         )}
       </nav>
-      ${liveView ? html`<p class="foot">La période et la source ci-dessous concernent le graphe historique. Le schéma reste l’instantané actuel.</p>` : nothing}
+      ${liveView ? html`<p class="foot">${tr("La période et la source ci-dessous concernent le graphe historique. Le schéma reste l’instantané actuel.")}</p>` : nothing}
       <div class="toolbar">
-        <div class="periods" role="group" aria-label="Plage temporelle">
+        <div class="periods" role="group" aria-label="${tr("Plage temporelle")}">
           ${[1, 3, 6, 12, 24, 48].map(
             (h) =>
               html`<button
@@ -483,17 +489,17 @@ export class VisualDiagnostics extends LitElement {
         </div>
         <div class="tools">
           <button
-            aria-label="Période précédente"
+            aria-label="${tr("Période précédente")}"
             @click=${() => this.shift(-1)}
           >
             ←</button
-          ><button aria-label="Période suivante" @click=${() => this.shift(1)}>
+          ><button aria-label="${tr("Période suivante")}" @click=${() => this.shift(1)}>
             →</button
-          ><button aria-label="Zoom avant" @click=${() => this.zoom(0.5)}>
+          ><button aria-label="${tr("Zoom avant")}" @click=${() => this.zoom(0.5)}>
             +</button
-          ><button aria-label="Zoom arrière" @click=${() => this.zoom(2)}>
+          ><button aria-label="${tr("Zoom arrière")}" @click=${() => this.zoom(2)}>
             −</button
-          ><button @click=${() => this.reset()}>Réinitialiser</button
+          ><button @click=${() => this.reset()}>${tr("Réinitialiser")}</button
           ><button
             ?disabled=${this.loading}
             @click=${() => {
@@ -501,19 +507,19 @@ export class VisualDiagnostics extends LitElement {
               void this.load();
             }}
           >
-            Actualiser Recorder
+            ${tr("Actualiser Recorder")}
           </button>
         </div>
       </div>
       <div class="source">
         <strong
           >${fromRecorder
-            ? "Recorder · historique persistant"
-            : "Historique de session · mémoire temporaire"}</strong
+            ? tr("Recorder · historique persistant")
+            : tr("Historique de session · mémoire temporaire")}</strong
         ><span
-          >${samples.length} publications ·
-          ${new Date(this.range[0] * 1000).toLocaleString()} →
-          ${new Date(this.range[1] * 1000).toLocaleString()}</span
+          >${samples.length} ${tr("publications")} ·
+          ${new Date(this.range[0] * 1000).toLocaleString(locale())} →
+          ${new Date(this.range[1] * 1000).toLocaleString(locale())}</span
         ><label
           ><input
             type="checkbox"
@@ -525,7 +531,7 @@ export class VisualDiagnostics extends LitElement {
               this.preferSession = (e.target as HTMLInputElement).checked;
             }}
           />
-          Session uniquement</label
+          ${tr("Session uniquement")}</label
         >
       </div>
       ${!fromRecorder
@@ -538,12 +544,12 @@ export class VisualDiagnostics extends LitElement {
                 if (this.followNow) this.reset();
               }}
             />
-            Suivre les nouvelles publications de session</label
+            ${tr("Suivre les nouvelles publications de session")}</label
           >`
         : nothing}
       ${this.loading
         ? html`<p role="status" class="notice">
-            Lecture de l’historique… La collecte de session continue.
+            ${tr("Lecture de l’historique… La collecte de session continue.")}
           </p>`
         : nothing}
       ${this.error
@@ -551,49 +557,42 @@ export class VisualDiagnostics extends LitElement {
         : nothing}
       ${!samples.length
         ? html`<p class="notice">
-            Aucune publication dans cette fenêtre. Sélectionner une plage plus
-            large ou attendre une mise à jour normale de Home Assistant.
+            ${tr("Aucune publication dans cette fenêtre. Sélectionner une plage plus large ou attendre une mise à jour normale de Home Assistant.")}
           </p>`
         : nothing}
-      <details class="pane quality-panel"><summary>Qualité des données de la fenêtre</summary>
-        <p>${fromRecorder?"Recorder":"Session"} · ${samples.length} publications · ${samples.filter(s=>valueAt(s,"temperature.indoor")!==null&&valueAt(s,"setpoint.filtered_setpoint")!==null&&valueAt(s,"power.applied_percent")!==null).length} avec mesure, consigne filtrée et commande.
-        ${samples.filter((s,i)=>i>0&&s.time-samples[i-1].time>600).length} interruption(s) entre publications > 10 min.</p>
-        <p>Unité historique : ${chartUnit}. Une unité absente des archives n’est pas remplacée par celle du thermostat actuel.</p>
-        <p>Les publications sont irrégulières. Ces nombres ne constituent pas un pourcentage de couverture temporelle. Aucun trou n’est rempli et aucune confiance actuelle n’est appliquée au passé.</p>
+      <details class="pane quality-panel"><summary>${tr("Qualité des données de la fenêtre")}</summary>
+        <p>${fromRecorder?"Recorder":"Session"} · ${samples.length} ${tr("publications")} · ${samples.filter(s=>valueAt(s,"temperature.indoor")!==null&&valueAt(s,"setpoint.filtered_setpoint")!==null&&valueAt(s,"power.applied_percent")!==null).length} ${tr("avec mesure, consigne filtrée et commande.")}
+        ${samples.filter((s,i)=>i>0&&s.time-samples[i-1].time>600).length} ${tr("interruption(s) entre publications > 10 min.")}</p>
+        <p>${tr("Unité historique :")} ${chartUnit}${tr(". Une unité absente des archives n’est pas remplacée par celle du thermostat actuel.")}</p>
+        <p>${tr("Les publications sont irrégulières. Ces nombres ne constituent pas un pourcentage de couverture temporelle. Aucun trou n’est rempli et aucune confiance actuelle n’est appliquée au passé.")}</p>
       </details>
       ${supervision && this.livePublicationMissing
-        ? html`<p class="notice" role="status">La publication du direct est introuvable dans la source et la fenêtre affichées. L’inspecteur affiche l’instantané actuel.</p>`
+        ? html`<p class="notice" role="status">${tr("La publication du direct est introuvable dans la source et la fenêtre affichées. L’inspecteur affiche l’instantané actuel.")}</p>`
         : nothing}
       ${this.tab === "evolution"
         ? html`<div class="supervision">
             ${this.inspectionPanel(d, selected, fromRecorder)}
             <div class="trends">
-            ${chart("Température et consigne filtrée", temp)}
-            ${chart("Commande du régulateur · pas des watts", power, true)}
-            ${chart("Écart consigne filtrée − température intérieure", [
+            ${chart(tr("Température et consigne filtrée"), temp)}
+            ${chart(tr("Commande du régulateur · pas des watts"), power, true)}
+            ${chart(tr("Écart consigne filtrée − température intérieure"), [
               {
-                label: "Écart filtré",
+                label: tr("Écart filtré"),
                 path: "error",
                 color: "#bc7254",
                 unit: "°C",
               },
             ])}
             <p class="foot">
-              Écart calculé uniquement avec deux valeurs du même état. Ce n’est
-              pas l’erreur de l’intégrateur ni une mesure de confort. Aucune
-              zone de bande morte n’est extrapolée. Les points sont des
-              publications irrégulières ; une ligne ne constitue pas une mesure
-              intermédiaire.
+              ${tr("Écart calculé uniquement avec deux valeurs du même état. Ce n’est pas l’erreur de l’intégrateur ni une mesure de confort. Aucune zone de bande morte n’est extrapolée. Les points sont des publications irrégulières ; une ligne ne constitue pas une mesure intermédiaire.")}
             </p>
             ${this.trackingPanel(tracking, samples.length, archivedUnit(samples))}
             <details class="pane pi-memory" ?open=${this.piMemoryOpen}
-              @toggle=${(event: Event) => {this.piMemoryOpen = (event.currentTarget as HTMLDetailsElement).open;}}><summary>Gains et mémoire du PI</summary>
-              <p class="foot">Valeurs internes natives publiées par SmartPI, sur trois échelles séparées et sans conversion d’unité.
-                L’état de l’intégrale décrit sa mémoire interne, pas sa contribution à la commande ni un pourcentage de chauffe.
-                Seuls les champs archivés dans la source et la fenêtre sélectionnées sont tracés ; une valeur absente reste un trou.</p>
-              ${this.piMemoryOpen ? html`${chart("Gain proportionnel Kp", [{label:"Kp publié",path:"control.kp",color:"#2689ca",unit:"",step:true}], false, true)}
-              ${chart("Gain intégral Ki", [{label:"Ki publié",path:"control.ki",color:"#9d78bd",unit:"",step:true}], false, true)}
-              ${chart("État de l’intégrale", [{label:"Mémoire intégrale publiée",path:"temperature.integral_error",color:"#bc7254",unit:""}], false, true)}` : nothing}
+              @toggle=${(event: Event) => {this.piMemoryOpen = (event.currentTarget as HTMLDetailsElement).open;}}><summary>${tr("Gains et mémoire du PI")}</summary>
+              <p class="foot">${tr("Valeurs internes natives publiées par SmartPI, sur trois échelles séparées et sans conversion d’unité. L’état de l’intégrale décrit sa mémoire interne, pas sa contribution à la commande ni un pourcentage de chauffe. Seuls les champs archivés dans la source et la fenêtre sélectionnées sont tracés ; une valeur absente reste un trou.")}</p>
+              ${this.piMemoryOpen ? html`${chart(tr("Gain proportionnel Kp"), [{label:tr("Kp publié"),path:"control.kp",color:"#2689ca",unit:"",step:true}], false, true)}
+              ${chart(tr("Gain intégral Ki"), [{label:tr("Ki publié"),path:"control.ki",color:"#9d78bd",unit:"",step:true}], false, true)}
+              ${chart(tr("État de l’intégrale"), [{label:tr("Mémoire intégrale publiée"),path:"temperature.integral_error",color:"#bc7254",unit:""}], false, true)}` : nothing}
             </details>
             <section class="chart"><smartpi-diagnostic-projection .samples=${samples} kind="scatter"
               .source=${fromRecorder ? "Recorder" : "Session"} .contextId=${`${d.entityId}/${fromRecorder}/${this.range.join('/')}`}
@@ -606,101 +605,89 @@ export class VisualDiagnostics extends LitElement {
                   .expert=${this.expert}
                 ></smartpi-control-diagram>
                 <button class="open-supervision" type="button"
-                  @click=${() => void this.openLivePublication()}>Voir dans Supervision</button>
+                  @click=${() => void this.openLivePublication()}>${tr("Voir dans Supervision")}</button>
               </section>
               <details class="pane chain-details">
-                <summary>Chaîne de commande détaillée</summary>
+                <summary>${tr("Chaîne de commande détaillée")}</summary>
                 <smartpi-command-chain .diagnostic=${d}></smartpi-command-chain>
               </details>
               <section class="pane command-comparison">
-                <p class="foot">${fromRecorder ? "Recorder" : "Session"} · ${new Date(this.range[0] * 1000).toLocaleString()} → ${new Date(this.range[1] * 1000).toLocaleString()}</p>
+                <p class="foot">${fromRecorder ? "Recorder" : "Session"} · ${new Date(this.range[0] * 1000).toLocaleString(locale())} → ${new Date(this.range[1] * 1000).toLocaleString(locale())}</p>
                 <smartpi-time-chart heading="Demande et sortie · écart de commande"
                   .samples=${samples} .range=${this.range} .percent=${true} .commandComparison=${true} .syncKey=${d.entityId}
                   .curves=${[power[1], power[0]]}
                   @time-range=${(e: CustomEvent<[number, number]>) => {if (e.detail[1] > e.detail[0]) {this.followNow = false; this.range = e.detail;}}}></smartpi-time-chart>
-                <p class="foot">La zone relie la demande publiée et la sortie appliquée de la même publication.
-                  Ce n’est ni une énergie perdue ni un diagnostic de cause. Les motifs historiques
-                  ne sont disponibles que si cette source les a conservés. Les données manquantes et
-                  interruptions supérieures à 10 min coupent le tracé. Les courbes en escalier ne sont pas des mesures intermédiaires.</p>
+                <p class="foot">${tr("La zone relie la demande publiée et la sortie appliquée de la même publication. Ce n’est ni une énergie perdue ni un diagnostic de cause. Les motifs historiques ne sont disponibles que si cette source les a conservés. Les données manquantes et interruptions supérieures à 10 min coupent le tracé. Les courbes en escalier ne sont pas des mesures intermédiaires.")}</p>
               </section>`
           : learning ? html`
               <section class="pane">
-                <div class="periods" role="group" aria-label="Repères d’apprentissage">
+                <div class="periods" role="group" aria-label="${tr("Repères d’apprentissage")}">
                   ${learningKinds.map((kind, i) => html`
                     <button type="button" aria-pressed=${!this.hiddenLearning.includes(kind)}
                       @click=${() => {
                         this.hiddenLearning = this.hiddenLearning.includes(kind)
                           ? this.hiddenLearning.filter((item) => item !== kind)
                           : [...this.hiddenLearning, kind];
-                      }}>${["●", "◆", "↑", "↓"][i]} ${kind}</button>`)}
+                      }}>${["●", "◆", "↑", "↓"][i]} ${tr(kind)}</button>`)}
                 </div>
-                <p class="foot">Les repères sont datés à la publication ou à l’observation.
-                  Les lettres A et B indiquent une hausse du compteur de mises à jour
-                  acceptées ou de mesures collectées entre deux publications. Le détail distingue les deux. Deux lettres à la même date peuvent
-                  regrouper des apprentissages survenus à des instants différents.
+                <p class="foot">${tr("Les repères sont datés à la publication ou à l’observation. Les lettres A et B indiquent une hausse du compteur de mises à jour acceptées ou de mesures collectées entre deux publications. Le détail distingue les deux. Deux lettres à la même date peuvent regrouper des apprentissages survenus à des instants différents.")}
                   ${samples.some((sample) => at(sample.live, "learning") !== undefined)
-                    ? "Consultez le détail pour connaître l’intervalle observé."
-                    : "Cette source ne contient pas les compteurs historiques. Les repères A/B sont indisponibles ici. La session conserve les diagnostics reçus pendant l’ouverture du panneau."}
-                  Zoomez pour séparer les repères rapprochés.</p>
-                <p class="foot">Fond orange · température en hausse. Fond bleu · température
-                  en baisse. Fond neutre · valeur stable ou absente. Ces intervalles
-                  comparent les mesures successives.</p>
+                    ? tr("Consultez le détail pour connaître l’intervalle observé.")
+                    : tr("Cette source ne contient pas les compteurs historiques. Les repères A/B sont indisponibles ici. La session conserve les diagnostics reçus pendant l’ouverture du panneau.")}
+                  ${tr("Zoomez pour séparer les repères rapprochés.")}</p>
+                <p class="foot">${tr("Fond orange · température en hausse. Fond bleu · température en baisse. Fond neutre · valeur stable ou absente. Ces intervalles comparent les mesures successives.")}</p>
                 ${fromRecorder && !samples.some((sample) => at(sample.live, "learning") !== undefined)
-                  ? html`<p class="notice">Le Recorder sélectionné contient les courbes, mais pas les
-                    compteurs d’apprentissage. Les événements passés ne peuvent pas être datés.
+                  ? html`<p class="notice">${tr("Le Recorder sélectionné contient les courbes, mais pas les compteurs d’apprentissage. Les événements passés ne peuvent pas être datés.")}
                     <button type="button" @click=${() => { this.preferSession = true; this.inspection = undefined; }}>
-                      Observer les prochains apprentissages en session</button></p>` : nothing}
-                ${chart("Température et consigne filtrée", learningTemp)}
-                ${chart("Activité du régulateur · commande appliquée", [power[0]], true)}
-                <p class="foot">En mode chauffage, une commande positive correspond à une
-                  chauffe commandée, zéro à un arrêt de commande. La température peut
-                  encore monter après l’arrêt. La commande est exprimée en pourcentage.</p>
+                      ${tr("Observer les prochains apprentissages en session")}</button></p>` : nothing}
+                ${chart(tr("Température et consigne filtrée"), learningTemp)}
+                ${chart(tr("Activité du régulateur · commande appliquée"), [power[0]], true)}
+                <p class="foot">${tr("En mode chauffage, une commande positive correspond à une chauffe commandée, zéro à un arrêt de commande. La température peut encore monter après l’arrêt. La commande est exprimée en pourcentage.")}</p>
                 ${samples.some((sample) => at(sample.live, "learning.emea_samples_a") !== undefined || at(sample.live, "learning.emea_samples_b") !== undefined)
-                  ? chart("Collecte du modèle · nombre de mesures conservées", [
-                    {label:"Mesures A", path:"live.learning.emea_samples_a", color:"#17638d", unit:"mesures", step:true},
-                    {label:"Mesures B", path:"live.learning.emea_samples_b", color:"#6f448a", unit:"mesures", step:true},
+                  ? chart(tr("Collecte du modèle · nombre de mesures conservées"), [
+                    {label:tr("Mesures A"), path:"live.learning.emea_samples_a", color:"#17638d", unit:"mesures", step:true},
+                    {label:tr("Mesures B"), path:"live.learning.emea_samples_b", color:"#6f448a", unit:"mesures", step:true},
                   ]) : nothing}
-                <p>Temps morts actuels · chauffe
+                <p>${tr("Temps morts actuels · chauffe")}
                   ${display(reliableValue(d.live, "model.deadtime_heat_s", "model.deadtime_heat_reliable"), " s")}
-                  · refroidissement
+                  · ${tr("refroidissement")}
                   ${display(reliableValue(d.live, "model.deadtime_cool_s", "model.deadtime_cool_reliable"), " s")}</p>
-                <p class="foot">↑ Chauffe et ↓ Refroidissement repèrent des publications.
-                  Les durées sont des médianes. Les bornes des épisodes ne sont pas publiées.
+                <p class="foot">${tr("↑ Chauffe et ↓ Refroidissement repèrent des publications. Les durées sont des médianes. Les bornes des épisodes ne sont pas publiées.")}
                   ${samples.some((sample) => at(sample.live, "analysis.deadtime") || at(sample.live, "model.deadtime_heat_reliable") !== undefined || at(sample.live, "model.deadtime_cool_reliable") !== undefined)
-                    ? "La couverture dépend des données présentes dans chaque publication."
-                    : "Cette fenêtre ne contient pas de diagnostics historiques de temps mort."}</p>
+                    ? tr("La couverture dépend des données présentes dans chaque publication.")
+                    : tr("Cette fenêtre ne contient pas de diagnostics historiques de temps mort.")}</p>
                 <details>
-                  <summary>Détail des repères (${marks.length})</summary>
+                  <summary>${tr("Détail des repères (")}${marks.length})</summary>
                   ${marks.length ? html`<ol>
                     ${marks.slice(-60).reverse().map((mark) => html`<li>
-                      <time datetime=${new Date(mark.time * 1000).toISOString()}>${new Date(mark.time * 1000).toLocaleString()}</time>
-                      ${mark.observedAt ? " (observation)" : ""} · ${mark.label}
+                      <time datetime=${new Date(mark.time * 1000).toISOString()}>${new Date(mark.time * 1000).toLocaleString(locale())}</time>
+                      ${mark.observedAt ? tr(" (observation)") : ""} · ${mark.label}
                     </li>`)}
                   </ol>
-                  ${marks.length > 60 ? html`<p class="foot">60 derniers repères. Zoomez pour consulter une plage plus courte.</p>` : nothing}`
-                  : html`<p>Aucun repère observable avec les filtres et les données de cette fenêtre.</p>`}
+                  ${marks.length > 60 ? html`<p class="foot">${tr("60 derniers repères. Zoomez pour consulter une plage plus courte.")}</p>` : nothing}`
+                  : html`<p>${tr("Aucun repère observable avec les filtres et les données de cette fenêtre.")}</p>`}
                 </details>
               </section>`
           : html`
               <div class="model-heading">
-                <h3>Modèle appris</h3>
+                <h3>${tr("Modèle appris")}</h3>
                 <span
-                  >Confiance actuelle :
+                  >${tr("Confiance actuelle :")}
                   ${display(at(d.live, "model.confidence"))}</span
                 >
               </div>
-              ${chart("A · gain de chauffe estimé", [
+              ${chart(tr("A · gain de chauffe estimé"), [
                 {
-                  label: "A appris",
+                  label: tr("A appris"),
                   path: "model.a",
                   color: "#2689ca",
                   unit: "°C/min/u",
                   step: true,
                 },
               ])}
-              ${chart("B · pertes thermiques estimées", [
+              ${chart(tr("B · pertes thermiques estimées"), [
                 {
-                  label: "B appris",
+                  label: tr("B appris"),
                   path: "model.b",
                   color: "#39a38a",
                   unit: "min⁻¹",
@@ -708,15 +695,13 @@ export class VisualDiagnostics extends LitElement {
                 },
               ])}
               <p class="foot">
-                La confiance actuelle ne valide pas rétroactivement ces séries.
-                Le contrat history ne contient pas de confiance historique ni de
-                mesures de référence A/B.
+                ${tr("La confiance actuelle ne valide pas rétroactivement ces séries. Le contrat history ne contient pas de confiance historique ni de mesures de référence A/B.")}
               </p>
               <section class="pane"><smartpi-diagnostic-projection .samples=${samples} kind="model"
                 .source=${fromRecorder ? "Recorder" : "Session"} .contextId=${`${d.entityId}/${fromRecorder}/${this.range.join('/')}`}>
               </smartpi-diagnostic-projection></section>
               <section class="pane">
-                <h3>Temps morts · instantané</h3>
+                <h3>${tr("Temps morts · instantané")}</h3>
                 <div class="metrics">
                   ${[
                     [
@@ -729,7 +714,7 @@ export class VisualDiagnostics extends LitElement {
                       "model.deadtime_cool_s",
                       "model.deadtime_cool_reliable",
                     ],
-                    ["Constante τ", "model.tau_min", "model.tau_reliable"],
+                    [tr("Constante τ"), "model.tau_min", "model.tau_reliable"],
                   ].map(
                     ([label, path, reliable]) =>
                       html`<div>
@@ -740,31 +725,31 @@ export class VisualDiagnostics extends LitElement {
                             path === "model.tau_min" ? " min" : " s",
                           )}</strong
                         ><small
-                          >Fiable : ${display(at(d.live, reliable))}</small
+                          >${tr("Fiable :")} ${display(at(d.live, reliable))}</small
                         >
                       </div>`,
                   )}
                 </div>
                 <p>
-                  Détection : ${display(at(d.live, "analysis.deadtime.state"))}
+                  ${tr("Détection :")} ${display(at(d.live, "analysis.deadtime.state"))}
                 </p>
               </section>
               <section class="pane">
-                <h3>Thermal Twin · instantané</h3>
+                <h3>${tr("Thermal Twin · instantané")}</h3>
                 <p>
-                  Modèle fiable :
+                  ${tr("Modèle fiable :")}
                   ${display(at(d.live, "analysis.twin.twin_model_reliable"))} ·
-                  Initialisation du Twin :
+                  ${tr("Initialisation du Twin :")}
                   ${display(at(d.live, "analysis.twin.twin_warming_up"))}
                 </p>
                 <div class="metrics">
                   ${[
-                    ["Température estimée", "twin_T_hat", " °C"],
-                    ["Température prédite", "twin_T_pred", " °C"],
-                    ["Innovation", "twin_innovation", " °C"],
-                    ["RMSE innovation · EMA", "twin_rmse_30", " °C"],
+                    [tr("Température estimée"), "twin_T_hat", " °C"],
+                    [tr("Température prédite"), "twin_T_pred", " °C"],
+                    [tr("Innovation"), "twin_innovation", " °C"],
+                    [tr("RMSE innovation · EMA"), "twin_rmse_30", " °C"],
                     [
-                      "Perturbation estimée",
+                      tr("Perturbation estimée"),
                       "twin_perturbation_dTdt",
                       " °C/min",
                     ],
@@ -783,7 +768,7 @@ export class VisualDiagnostics extends LitElement {
                   )}
                 </div>
                 <p>
-                  Équilibre :
+                  ${tr("Équilibre :")}
                   ${display(
                     reliableValue(
                       d.live,
@@ -792,7 +777,7 @@ export class VisualDiagnostics extends LitElement {
                     ),
                     " °C",
                   )}
-                  · Consigne atteignable (prédiction) :
+                  · ${tr("Consigne atteignable (prédiction) :")}
                   ${display(
                     reliableValue(
                       d.live,
@@ -802,21 +787,17 @@ export class VisualDiagnostics extends LitElement {
                   )}
                 </p>
                 <p class="foot">
-                  Aucune courbe Twin : ces valeurs ne font pas partie des huit
-                  séries Recorder standard. Fiabilité déclarée ≠ exactitude
-                  physique démontrée.
+                  ${tr("Aucune courbe Twin : ces valeurs ne font pas partie des huit séries Recorder standard. Fiabilité déclarée ≠ exactitude physique démontrée.")}
                 </p>
               </section>
             `}
       ${liveView || learning ? nothing : html`<section class="timeline">
         <h3 id="journal-title" tabindex="-1">
-          Journal des publications
-          <span>${events.length} variations observées</span>
+          ${tr("Journal des publications")}
+          <span>${events.length} ${tr("variations observées")}</span>
         </h3>
         <p class="foot">
-          Annotations issues d’une comparaison d’états, pas d’événements
-          internes explicitement horodatés. Les motifs absents de Recorder ne
-          sont pas reconstruits.
+          ${tr("Annotations issues d’une comparaison d’états, pas d’événements internes explicitement horodatés. Les motifs absents de Recorder ne sont pas reconstruits.")}
         </p>
         <ol>
           ${events
@@ -825,7 +806,7 @@ export class VisualDiagnostics extends LitElement {
             .map(
               (e) =>
                 html`<li>
-                  <time>${new Date(e.time * 1000).toLocaleString()}</time>
+                  <time>${new Date(e.time * 1000).toLocaleString(locale())}</time>
                   <div>
                     ${supervision
                       ? html`<button type="button" aria-pressed=${selected?.time === e.time}
@@ -838,26 +819,19 @@ export class VisualDiagnostics extends LitElement {
             )}
         </ol>
         ${events.length === 0
-          ? html`<p>Aucune transition observable sur cette fenêtre.</p>`
+          ? html`<p>${tr("Aucune transition observable sur cette fenêtre.")}</p>`
           : html`<p class="foot">
-              60 dernières variations affichées au maximum.
+              ${tr("60 dernières variations affichées au maximum.")}
             </p>`}
       </section>`}
       ${this.expert
         ? html`<details class="provenance">
-            <summary>Provenance et interactions</summary>
+            <summary>${tr("Provenance et interactions")}</summary>
             <p>
-              attributes.history pour les huit séries ; attributes.live pour le
-              schéma actuel. Glisser horizontalement pour zoomer, légende
-              cliquable, curseurs synchronisés ; boutons de zoom/déplacement
-              accessibles au clavier et au tactile. Dates affichées dans le
-              fuseau du navigateur, avec détails dans les tables.
+              ${tr("attributes.history pour les huit séries ; attributes.live pour le schéma actuel. Glisser horizontalement pour zoomer, légende cliquable, curseurs synchronisés ; boutons de zoom/déplacement accessibles au clavier et au tactile. Dates affichées dans le fuseau du navigateur, avec détails dans les tables.")}
             </p>
             <p>
-              Requête officielle history/history_during_period, attributs
-              complets. Aucun service ni changement d’état. La source choisie
-              reste distincte : aucune fusion silencieuse entre Recorder et
-              session.
+              ${tr("Requête officielle history/history_during_period, attributs complets. Aucun service ni changement d’état. La source choisie reste distincte : aucune fusion silencieuse entre Recorder et session.")}
             </p>
           </details>`
         : nothing}

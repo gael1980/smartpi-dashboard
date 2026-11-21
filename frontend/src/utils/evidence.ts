@@ -1,13 +1,14 @@
 import {num} from "../adapter";
 import {normalize, sameSampleContext, timestamp, valueAt, type Sample} from "./timeseries";
+import {tr} from "../i18n";
 
 export class PublicationQuality {
   static describe(value: unknown, date: unknown, available = true, now = Date.now()/1000) {
     const time = timestamp(date);
-    if (!available) return "Source indisponible";
-    if (value === null || value === undefined || (typeof value === "number" && !Number.isFinite(value))) return "Valeur absente";
-    if (time === null || time > now + 60) return "Horodatage non vérifiable";
-    return now - time > 600 ? "Publication ancienne" : "Publication récente";
+    if (!available) return tr("Source indisponible");
+    if (value === null || value === undefined || (typeof value === "number" && !Number.isFinite(value))) return tr("Valeur absente");
+    if (time === null || time > now + 60) return tr("Horodatage non vérifiable");
+    return now - time > 600 ? tr("Publication ancienne") : tr("Publication récente");
   }
 }
 
@@ -28,7 +29,7 @@ export class ResponseEpisodes {
   readonly episodes: ResponseEpisode[] = [];
   excluded = 0;
   constructor(points: ObservationPoint[], readonly tolerance: number) {
-    if (!Number.isFinite(tolerance) || tolerance < 0) throw new Error("Tolérance invalide");
+    if (!Number.isFinite(tolerance) || tolerance < 0) throw new Error(tr("Tolérance invalide"));
     const ordered = [...new Map(points.map(p => [p.time,p])).values()].filter(p=>Number.isFinite(p.time)).sort((a,b)=>a.time-b.time);
     let current: ResponseEpisode | undefined, context = "", previous: ObservationPoint | undefined;
     for (const p of ordered) {
@@ -38,14 +39,14 @@ export class ResponseEpisodes {
         p.window!=="on" && p.safety!==true && p.overpowering!==true;
       const gap = !!previous && p.time-previous.time>ResponseEpisodes.GAP;
       if (!valid || gap || context!==nextContext) {
-        if(current) current.endReason = !valid ? "Donnée ou contexte exclu" : gap ? "Interruption > 10 min" : "Consigne, mode, unité ou liaison modifié";
+        if(current) current.endReason = !valid ? tr("Donnée ou contexte exclu") : gap ? tr("Interruption > 10 min") : tr("Consigne, mode, unité ou liaison modifié");
         current=undefined;
       }
       if (!valid) {this.excluded++;previous=p;context=nextContext;continue;}
       const t=p.temperature!,target=p.target!;
       if(!current){
         current={start:p.time,end:p.time,target,baseline:t,unit:p.unit!,mode:p.mode!,minimum:t,maximum:t,last:t,publications:0,
-          bracketedSeconds:0,firstWithin:null,overshoot:0,endReason:"Fin des observations disponibles",contextKnown:true};
+          bracketedSeconds:0,firstWithin:null,overshoot:0,endReason:tr("Fin des observations disponibles"),contextKnown:true};
         this.episodes.push(current);
       } else current.bracketedSeconds+=p.time-current.end;
       current.end=p.time;current.minimum=Math.min(current.minimum,t);current.maximum=Math.max(current.maximum,t);current.last=t;current.publications++;

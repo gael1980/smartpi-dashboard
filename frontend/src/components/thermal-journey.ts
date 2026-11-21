@@ -6,6 +6,7 @@ import {ThermalJourney, type Choice} from "../utils/thermal-journey";
 import {applyClimateChoice, type ClimateConnection} from "../services/climate";
 import type {ObservatoryConnection} from "../services/observatory";
 import {DecisionPresentation} from "../utils/decision";
+import {tr} from "../i18n";
 
 @customElement("smartpi-thermal-journey")
 export class ThermalJourneyElement extends LitElement {
@@ -30,7 +31,7 @@ export class ThermalJourneyElement extends LitElement {
       this.diagnosticId = this.diagnostic.entityId;
       this.context = next;
       this.choice = undefined;
-      this.message = initial ? "" : this.sending ? "Le thermostat a changé. Vérifiez les valeurs reçues." : "";
+      this.message = initial ? "" : this.sending ? tr("Le thermostat a changé. Vérifiez les valeurs reçues.") : "";
       this.failed = false;
       this.awaitingPublication = initial ? undefined : this.diagnostic.lastUpdated;
       ++this.generation;
@@ -49,7 +50,7 @@ export class ThermalJourneyElement extends LitElement {
       this.sending = false;
       this.activeRequest = undefined;
       this.failed = true;
-      this.message = "Résultat non confirmé après la fermeture du panneau. Vérifiez les valeurs reçues avant un nouveau choix.";
+      this.message = tr("Résultat non confirmé après la fermeture du panneau. Vérifiez les valeurs reçues avant un nouveau choix.");
       this.awaitingPublication = this.diagnostic?.lastUpdated;
     }
     super.disconnectedCallback();
@@ -69,18 +70,18 @@ export class ThermalJourneyElement extends LitElement {
     if (!this.hass || !this.diagnostic || !this.choice || this.sending) return;
     const generation = ++this.generation, choice = this.choice, context = this.context;
     const request = Symbol(); this.activeRequest = request;
-    this.sending = true; this.message = "Envoi en cours…"; this.failed = false;
+    this.sending = true; this.message = tr("Envoi en cours…"); this.failed = false;
     try {
       const result = await applyClimateChoice(this.hass, this.diagnostic, choice, context,
         () => this.isConnected && generation === this.generation && !!this.diagnostic && new ThermalJourney(this.hass, this.diagnostic).context === context);
       if (generation !== this.generation || !this.isConnected) return;
       this.awaitingPublication = this.diagnostic.lastUpdated;
       this.choice = undefined;
-      this.message = "Demande envoyée. Les valeurs affichées restent celles reçues de Home Assistant." + (result.receipt ? "" : " Reçu non disponible.");
+      this.message = tr("Demande envoyée. Les valeurs affichées restent celles reçues de Home Assistant.") + (result.receipt ? "" : tr(" Reçu non disponible."));
     } catch (error) {
       if (generation !== this.generation || !this.isConnected) return;
       this.failed = true;
-      this.message = error instanceof Error ? error.message : "Envoi impossible. Vérifiez le thermostat avant de réessayer.";
+      this.message = error instanceof Error ? tr(error.message) : tr("Envoi impossible. Vérifiez le thermostat avant de réessayer.");
     } finally {
       if (this.activeRequest === request) { this.activeRequest = undefined; this.sending = false; }
       this.dispatchEvent(new CustomEvent("observatory-refresh", {detail: {entityId: this.diagnostic?.entityId}, bubbles: true, composed: true}));
@@ -100,48 +101,48 @@ export class ThermalJourneyElement extends LitElement {
     const eta = twin.eta;
     const service = typeof this.hass?.callService === "function";
     const selectedPreset = model.presets.find(p => p.id === (this.choice?.kind === "preset" ? this.choice.value : model.attributes.preset_mode));
-    const choiceLabel = this.choice?.kind === "preset" ? selectedPreset?.label ?? this.choice.value : "Température manuelle";
+    const choiceLabel = this.choice?.kind === "preset" ? selectedPreset?.label ?? this.choice.value : tr("Température manuelle");
     const ticks = Array.from({length: 5}, (_, i) => low + (high - low) * i / 4);
     return html`<section aria-labelledby="journey-title">
-      <div class="heading"><h3 id="journey-title">Trajet thermique</h3>
-        <span class="mode">${model.available ? model.climate?.state === "off" ? "Thermostat arrêté" : model.attributes.hvac_action === "heating" ? "En chauffe" : model.attributes.hvac_action === "cooling" ? "En refroidissement" : "En direct" : "Thermostat indisponible"}</span></div>
+      <div class="heading"><h3 id="journey-title">${tr("Trajet thermique")}</h3>
+        <span class="mode">${model.available ? model.climate?.state === "off" ? tr("Thermostat arrêté") : model.attributes.hvac_action === "heating" ? tr("En chauffe") : model.attributes.hvac_action === "cooling" ? tr("En refroidissement") : tr("En direct") : tr("Thermostat indisponible")}</span></div>
       <div class="readings">
-        <div><span class="caption"><i class="dot"></i>Actuellement</span><strong class="measured" aria-label=${current === null ? "Température indisponible" : nothing}>${current === null ? "—" : display(current, "", 1)}<small> ${unit}</small></strong></div>
-        <div class="destination"><span class="caption"><i class="diamond"></i>Consigne active</span><strong aria-label=${target === null ? "Consigne indisponible" : nothing}>${target === null ? "—" : display(target, "", 1)}<small> ${model.unit ?? ""}</small></strong>
+        <div><span class="caption"><i class="dot"></i>${tr("Actuellement")}</span><strong class="measured" aria-label=${current === null ? tr("Température indisponible") : nothing}>${current === null ? "—" : display(current, "", 1)}<small> ${unit}</small></strong></div>
+        <div class="destination"><span class="caption"><i class="diamond"></i>${tr("Consigne active")}</span><strong aria-label=${target === null ? tr("Consigne indisponible") : nothing}>${target === null ? "—" : display(target, "", 1)}<small> ${model.unit ?? ""}</small></strong>
           <span class="preset-name">${model.presets.find(p => p.id === model.attributes.preset_mode)?.label ?? ""}</span></div>
       </div>
       <div class="journey-signals">
-      <div class="effort-band" aria-label="Commande et écart à la consigne active">
-        <span class="signal-caption">RÉGULATION · COMMANDE</span>
+      <div class="effort-band" aria-label="${tr("Commande et écart à la consigne active")}">
+        <span class="signal-caption">${tr("RÉGULATION · COMMANDE")}</span>
         ${effort ? html`
           <div class="effort-heading"><span>${effort.label}</span><strong>${effort.percent > 0 && effort.percent < .01 ? "< 0,01 %" : display(effort.percent, " %", 2)}</strong></div>
           <div class=${"effort-track " + (effort.direction < 0 ? "cool" : effort.direction === 0 ? "neutral" : "heat")}
-            role="meter" aria-label=${effort.label + " appliquée"} aria-valuemin="0" aria-valuemax="100" aria-valuenow=${effort.percent} aria-valuetext=${display(effort.percent, " % appliqués", 4)}>
+            role="meter" aria-label=${effort.label + tr(" appliquée")} aria-valuemin="0" aria-valuemax="100" aria-valuenow=${effort.percent} aria-valuetext=${display(effort.percent, tr(" % appliqués"), 4)}>
             ${effort.percent > 0 ? html`<span class=${"effort-arrow " + (effort.direction < 0 ? "reverse" : effort.direction === 0 ? "neutral" : "")} style=${`width:${effort.percent}%`} aria-hidden="true"></span>` : nothing}
-          </div>` : html`<p class="effort-missing">Commande appliquée · données récentes indisponibles</p>`}
-        ${maintenance ? html`<div class="maintenance"><strong>Chauffe de maintien</strong><span class="maintenance-caption">Le FF compense les pertes · le PI ajuste</span>
+          </div>` : html`<p class="effort-missing">${tr("Commande appliquée · données récentes indisponibles")}</p>`}
+        ${maintenance ? html`<div class="maintenance"><strong>${tr("Chauffe de maintien")}</strong><span class="maintenance-caption">${tr("Le FF compense les pertes · le PI ajuste")}</span>
           <div class="contributions"><span>FF <b>+${display(maintenance.ff, " %", 1)}</b></span><span>PI <b>${display(maintenance.pi, " %", 1)}</b></span></div>
-          <p>La commande entretient la chaleur pour maintenir la consigne. Elle n’indique pas une montée en température mesurée.</p></div>` : nothing}
+          <p>${tr("La commande entretient la chaleur pour maintenir la consigne. Elle n’indique pas une montée en température mesurée.")}</p></div>` : nothing}
         <div class=${"setpoint-position " + (position?.overshoot ? "overshoot" : "")}>
           ${position?.overshoot ? html`<span class="return-chevron" data-direction=${position.direction < 0 ? "left" : "right"} aria-hidden="true">${position.direction < 0 ? "‹" : "›"}</span>
-            <span>${position.kind === "above" ? "Au-dessus de +" : "Au-dessous de −"}${display(position.gap, unit, 1)} · retour visé vers ${display(position.target, unit, 1)}</span>`
-            : position?.kind === "aligned" ? html`<span class="aligned-mark" aria-hidden="true">◇</span><span>À la consigne affichée</span>`
-            : position ? html`<span>Encore ${display(position.gap, unit, 1)} vers la consigne active</span>`
-            : html`<span>Écart à la consigne indisponible</span>`}
+            <span>${position.kind === "above" ? tr("Au-dessus de +") : tr("Au-dessous de −")}${display(position.gap, unit, 1)} · ${tr("retour visé vers")} ${display(position.target, unit, 1)}</span>`
+            : position?.kind === "aligned" ? html`<span class="aligned-mark" aria-hidden="true">◇</span><span>${tr("À la consigne affichée")}</span>`
+            : position ? html`<span>${tr("Encore")} ${display(position.gap, unit, 1)} ${tr("vers la consigne active")}</span>`
+            : html`<span>${tr("Écart à la consigne indisponible")}</span>`}
         </div>
       </div>
-      <div class="twin-signal" aria-label="Projection du Thermal Twin">
-        <div class="twin-heading"><span class="signal-caption">THERMAL TWIN · MODÈLE</span><span class="twin-badge">${twin.predicted !== null ? "Projection disponible" : "En attente"}</span></div>
+      <div class="twin-signal" aria-label="${tr("Projection du Thermal Twin")}">
+        <div class="twin-heading"><span class="signal-caption">${tr("THERMAL TWIN · MODÈLE")}</span><span class="twin-badge">${twin.predicted !== null ? tr("Projection disponible") : tr("En attente")}</span></div>
         ${twin.predicted !== null ? html`<div class="twin-values">
-          <div><span>État estimé</span><strong>${display(twin.estimated, unit, 2)}</strong></div>
+          <div><span>${tr("État estimé")}</span><strong>${display(twin.estimated, unit, 2)}</strong></div>
           ${twin.estimated !== null ? html`<svg class="twin-arrow" viewBox="0 0 100 24" aria-hidden="true"><path d="M2 12 H94 M86 5 L94 12 L86 19"/></svg>` : nothing}
-          <div><span>Prédiction publiée</span><strong>${display(twin.predicted, unit, 2)}</strong></div>
-        </div><p class="twin-footnote">Sorties du même pas de calcul · horizon non publié</p>` : nothing}
-        <div class=${"twin-eta " + (eta ? "eta available" : "")}><span>ETA · consigne active</span><strong>${eta?.label ?? "Non calculable"}</strong></div>
+          <div><span>${tr("Prédiction publiée")}</span><strong>${display(twin.predicted, unit, 2)}</strong></div>
+        </div><p class="twin-footnote">${tr("Sorties du même pas de calcul · horizon non publié")}</p>` : nothing}
+        <div class=${"twin-eta " + (eta ? "eta available" : "")}><span>${tr("ETA · consigne active")}</span><strong>${eta?.label ?? tr("Non calculable")}</strong></div>
         <p class="eta-detail">${twin.detail}</p>
       </div>
       </div>
-      ${model.unit !== null ? html`<svg class="rail" viewBox="0 0 1000 210" role="img" aria-label=${`Échelle de température. Mesure ${display(current, unit, 1)}. Consigne active ${display(target, unit, 1)}.${this.choice ? ` Aperçu ${display(candidate, unit, 1)}.` : ""}`}>
+      ${model.unit !== null ? html`<svg class="rail" viewBox="0 0 1000 210" role="img" aria-label=${tr("Échelle de température. Mesure {0}. Consigne active {1}.{2}", display(current, unit, 1), display(target, unit, 1), this.choice ? tr(" Aperçu {0}.", display(candidate, unit, 1)) : "")}>
         <line x1="60" x2="940" y1="95" y2="95" class="axis"/>
         ${model.presets.filter(p => p.temperature !== null).map(p => svg`<line x1=${x(p.temperature!)} x2=${x(p.temperature!)} y1="84" y2="108" class="preset-tick"><title>${p.label} ${display(p.temperature, unit, 1)}</title></line>`)}
         ${current !== null && target !== null ? svg`<line x1=${x(current)} x2=${x(target)} y1="95" y2="95" class="distance"/>` : nothing}
@@ -150,40 +151,40 @@ export class ThermalJourneyElement extends LitElement {
         ${target !== null ? svg`<path d=${`M ${x(target)} 83 l 12 12 -12 12 -12 -12 Z`} class="target-point"/>` : nothing}
         ${this.choice && candidate !== null ? svg`<line x1=${x(candidate)} x2=${x(candidate)} y1="56" y2="124" class="preview-line"/><path d=${`M ${x(candidate)} 83 l 12 12 -12 12 -12 -12 Z`} class="preview-point"/>` : nothing}
       </svg>` : nothing}
-      <details class="authority"><summary>Qui a la main ? <span>${decision.reasons[0]?.label ?? "Origine du réglage non publiée"}</span></summary>
-        <p class="note">Demande conservée · ${display(decision.requestedTemperature, unit, 1)}
-          · consigne retenue · ${display(target, unit, 1)}</p>
+      <details class="authority"><summary>${tr("Qui a la main ?")} <span>${decision.reasons[0]?.label ?? tr("Origine du réglage non publiée")}</span></summary>
+        <p class="note">${tr("Demande conservée")} · ${display(decision.requestedTemperature, unit, 1)}
+          · ${tr("consigne retenue")} · ${display(target, unit, 1)}</p>
         ${decision.reasons.length ? html`<ul>${decision.reasons.map(reason => html`<li>${reason.label} <small>(${reason.code})</small></li>`)}</ul>`
-          : html`<p class="note">Aucun motif de priorité publié dans cet instantané.</p>`}
-        <p class="note">Ces motifs décrivent les priorités du thermostat. Ils n’identifient pas la personne ou l’automatisation à l’origine du changement.</p>
+          : html`<p class="note">${tr("Aucun motif de priorité publié dans cet instantané.")}</p>`}
+        <p class="note">${tr("Ces motifs décrivent les priorités du thermostat. Ils n’identifient pas la personne ou l’automatisation à l’origine du changement.")}</p>
       </details>
-      <div class="presets" role="group" aria-label="Choisir un preset">
+      <div class="presets" role="group" aria-label="${tr("Choisir un preset")}">
         ${model.presets.map(p => html`<button type="button" class=${"preset " + (model.attributes.preset_mode === p.id ? "active" : "")}
           aria-pressed=${this.choice?.kind === "preset" && this.choice.value === p.id}
           ?disabled=${!service || !model.canSetPreset || this.sending} @click=${() => this.choose({kind: "preset", value: p.id})}>
-          <span>${p.label}${model.attributes.preset_mode === p.id ? html`<span class="active-label"> · actif</span>` : nothing}</span>
+          <span>${p.label}${model.attributes.preset_mode === p.id ? html`<span class="active-label"> · ${tr("actif")}</span>` : nothing}</span>
           <strong>${p.temperature === null ? "—" : display(p.temperature, unit, 1)}</strong></button>`)}
       </div>
       ${model.canSetTemperature ? html`<div class="temperature-control">
-        <label for="temperature">Choisir une température <span>${display(candidate ?? target, unit, 1)}</span></label>
-        <div class="adjust"><button type="button" aria-label="Diminuer la température" ?disabled=${!service || this.sending || (candidate ?? target!) <= model.minimum!}
+        <label for="temperature">${tr("Choisir une température")} <span>${display(candidate ?? target, unit, 1)}</span></label>
+        <div class="adjust"><button type="button" aria-label="${tr("Diminuer la température")}" ?disabled=${!service || this.sending || (candidate ?? target!) <= model.minimum!}
           @click=${() => this.choose({kind: "temperature", value: model.shift(candidate ?? target!, -1)})}>−</button>
           <input id="temperature" type="range" min=${model.minimum!} max=${model.maximum!} step=${model.step!}
             .value=${live(String(candidate ?? target))} aria-valuetext=${display(candidate ?? target, unit, 1)} ?disabled=${!service || this.sending}
             @input=${(event: Event) => this.choose({kind: "temperature", value: Number((event.currentTarget as HTMLInputElement).value)})}/>
-          <button type="button" aria-label="Augmenter la température" ?disabled=${!service || this.sending || (candidate ?? target!) >= model.maximum!}
+          <button type="button" aria-label="${tr("Augmenter la température")}" ?disabled=${!service || this.sending || (candidate ?? target!) >= model.maximum!}
             @click=${() => this.choose({kind: "temperature", value: model.shift(candidate ?? target!, 1)})}>+</button></div>
       </div>` : nothing}
-      ${this.choice ? html`<div class="preview" aria-label="Aperçu du réglage"><div><span class="caption">Aperçu · ${choiceLabel}</span>
-        <strong>${candidate !== null ? display(candidate, unit, 1) : "Température déterminée par le thermostat"}</strong></div>
-        <div class="actions"><button type="button" ?disabled=${this.sending} @click=${this.cancel}>Annuler</button>
-          <button type="button" class="apply" ?disabled=${this.sending || !model.validate(this.choice)} @click=${this.apply}>${this.sending ? "Envoi…" : "Appliquer"}</button></div></div>` : nothing}
-      ${advice.length ? html`<ul class="advice" aria-label="Avant d’appliquer">${advice.map(text => html`<li>${text}</li>`)}</ul>` : nothing}
+      ${this.choice ? html`<div class="preview" aria-label="${tr("Aperçu du réglage")}"><div><span class="caption">${tr("Aperçu")} · ${choiceLabel}</span>
+        <strong>${candidate !== null ? display(candidate, unit, 1) : tr("Température déterminée par le thermostat")}</strong></div>
+        <div class="actions"><button type="button" ?disabled=${this.sending} @click=${this.cancel}>${tr("Annuler")}</button>
+          <button type="button" class="apply" ?disabled=${this.sending || !model.validate(this.choice)} @click=${this.apply}>${this.sending ? tr("Envoi…") : tr("Appliquer")}</button></div></div>` : nothing}
+      ${advice.length ? html`<ul class="advice" aria-label="${tr("Avant d’appliquer")}">${advice.map(text => html`<li>${text}</li>`)}</ul>` : nothing}
       <p class=${"status " + (this.failed ? "error" : "")} role="status" aria-live="polite">${this.message}</p>
-      ${model.locked ? html`<p class="note">Thermostat verrouillé.</p>` : nothing}
-      ${!model.climate ? html`<p class="note">Aucun thermostat explicitement lié à ce diagnostic.</p>` : nothing}
-      ${model.filtered !== null && target !== null && Math.abs(model.filtered - target) > 0.01 ? html`<p class="note">Consigne filtrée de la régulation : ${display(model.filtered, unit, 1)}</p>` : nothing}
-      <p class="note scheduling">Les plannings restent gérés par ha-chauffage ou Scheduler.</p>
+      ${model.locked ? html`<p class="note">${tr("Thermostat verrouillé.")}</p>` : nothing}
+      ${!model.climate ? html`<p class="note">${tr("Aucun thermostat explicitement lié à ce diagnostic.")}</p>` : nothing}
+      ${model.filtered !== null && target !== null && Math.abs(model.filtered - target) > 0.01 ? html`<p class="note">${tr("Consigne filtrée de la régulation :")} ${display(model.filtered, unit, 1)}</p>` : nothing}
+      <p class="note scheduling">${tr("Les plannings restent gérés par ha-chauffage ou Scheduler.")}</p>
     </section>`;
   }
   static styles = css`

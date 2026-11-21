@@ -1,3 +1,4 @@
+import {tr, locale} from "./i18n";
 /** Strict read-only data adapter; explicit climate actions live in services/climate.ts. */
 export type Rec = Record<string, unknown>;
 export interface HAState {
@@ -7,7 +8,7 @@ export interface HAState {
   last_updated?: string;
   last_changed?: string;
 }
-export interface HassLike { states: Record<string, HAState>; language?: string; config?: {unit_system?: {temperature?: string}} }
+export interface HassLike { states: Record<string, HAState>; language?: string; locale?: {language?: string}; config?: {unit_system?: {temperature?: string}} }
 export interface SmartPIDiagnostic {
   entityId: string;
   climateId: string | null;
@@ -31,10 +32,10 @@ export function num(value: unknown): number | null {
 }
 export function display(value: unknown, unit = "", digits = 2): string {
   const n = num(value);
-  if (n !== null) return n.toLocaleString("fr-FR", {maximumFractionDigits: digits}) + unit;
-  if (typeof value === "boolean") return value ? "Oui" : "Non";
+  if (n !== null) return n.toLocaleString(locale(), {maximumFractionDigits: digits}) + unit;
+  if (typeof value === "boolean") return value ? tr("Oui") : tr("Non");
   if (typeof value === "string" && value.trim() !== "") return value;
-  return "Indisponible";
+  return tr("Indisponible");
 }
 export function inBootstrap(d: SmartPIDiagnostic): boolean {
   return at(d.live, "control.mode") === "hysteresis" || at(d.live, "learning.stage") === "bootstrap";
@@ -73,27 +74,27 @@ export function discover(hass: HassLike | null | undefined): SmartPIDiagnostic[]
       live: sensor.state === "unknown" || sensor.state === "unavailable" ? {} : a.live, history: a.history,
     });
   }
-  return result.sort((a, b) => a.name.localeCompare(b.name, "fr"));
+  return result.sort((a, b) => a.name.localeCompare(b.name, locale()));
 }
 export function explanations(d: SmartPIDiagnostic): string[] {
   const result: string[] = [];
-  if (!d.available) return ["Capteur indisponible : ses anciens attributs ne représentent pas des valeurs actuelles."];
-  result.push("Le modèle A/B reste une estimation apprise ; consulter son état de confiance avant toute interprétation physique.");
+  if (!d.available) return [tr("Capteur indisponible : ses anciens attributs ne représentent pas des valeurs actuelles.")];
+  result.push(tr("Le modèle A/B reste une estimation apprise ; consulter son état de confiance avant toute interprétation physique."));
   if (inBootstrap(d)) result.push(
-    "Apprentissage initial par hystérésis : la commande appliquée ne provient pas nécessairement de la somme PI + FF. Ce décalage ne prouve pas une anomalie."
+    tr("Apprentissage initial par hystérésis : la commande appliquée ne provient pas nécessairement de la somme PI + FF. Ce décalage ne prouve pas une anomalie.")
   );
   if (at(d.live, "control.in_deadtime_window") === true) result.push(
-    "Fenêtre de temps mort en cours. Des observations d’apprentissage peuvent être rejetées pendant cette fenêtre."
+    tr("Fenêtre de temps mort en cours. Des observations d’apprentissage peuvent être rejetées pendant cette fenêtre.")
   );
   if (at(d.live, "model.tau_reliable") === false) result.push(
-    "Constante de temps τ déclarée non fiable : ne pas interpréter sa valeur brute comme une durée physique validée."
+    tr("Constante de temps τ déclarée non fiable : ne pas interpréter sa valeur brute comme une durée physique validée.")
   );
   if (at(d.live, "analysis.twin.twin_T_steady_reliable") === false) result.push(
-    "Température d’équilibre prédite non fiable : elle n’est pas utilisée comme indication de confort ou d’atteignabilité."
+    tr("Température d’équilibre prédite non fiable : elle n’est pas utilisée comme indication de confort ou d’atteignabilité.")
   );
   const ff3 = at(d.live, "feedforward.ff3_status");
   if (typeof ff3 === "string" && ff3.startsWith("disabled:")) result.push(
-    "FF3 non actif ; motif publié par SmartPI : " + ff3 + "."
+    tr("FF3 non actif ; motif publié par SmartPI : ") + ff3 + "."
   );
   return result;
 }

@@ -1,5 +1,17 @@
 # Changelog
 
+## Non publié
+
+- Panneau traduit en anglais : la langue suit celle de l’utilisateur Home
+  Assistant (français pour le français, anglais pour les autres langues). Le
+  français reste la langue source dans le code (`tr("…")`) ; le catalogue
+  `frontend/src/locales/en.ts` associe chaque texte français à sa traduction.
+- Dates et nombres formatés selon la langue Home Assistant au lieu de `fr-FR`
+  fixe. Les messages et motifs du composant restent stockés en français et sont
+  traduits à l’affichage.
+- Test de complétude : chaque texte traduisible doit exister dans le catalogue
+  anglais avec les mêmes paramètres.
+
 ## 0.5.0 — 2026-11-15 — Fiabilité et explications SmartPI
 
 - Durcissement reproductible de la fusion d’options uPlot pour empêcher les

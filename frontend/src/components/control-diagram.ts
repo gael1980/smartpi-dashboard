@@ -2,6 +2,7 @@ import { LitElement, html, svg, css, nothing } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 import { type SmartPIDiagnostic } from "../adapter";
 import { ControlPresentation, type ControlBlock } from "../utils/control";
+import {tr, locale, dateTimeFormat} from "../i18n";
 @customElement("smartpi-control-diagram")
 export class ControlDiagram extends LitElement {
   @property({ attribute: false }) diagnostic?: SmartPIDiagnostic;
@@ -24,31 +25,31 @@ export class ControlDiagram extends LitElement {
     const chosen = (this.selected?.context === context
       ? blocks.find((block) => block.id === this.selected?.id)
       : undefined) ?? defaultBlock;
-    const routeLabel = directMode ? `Voie directe · ${directMode}` :
-      route === "pi" ? "Voie PI + anticipation" : "Chemin non vérifié";
+    const routeLabel = directMode ? tr("Voie directe · {0}", directMode) :
+      route === "pi" ? tr("Voie PI + anticipation") : tr("Chemin non vérifié");
     const note = directMode
-      ? ["PI/FF contournés", `SmartPI déclare une voie directe en ${directMode.toLocaleLowerCase("fr-FR")}.`]
+      ? [tr("PI/FF contournés"), tr("SmartPI déclare une voie directe en {0}.", directMode.toLocaleLowerCase(locale()))]
       : route !== "pi"
-        ? ["Motif indisponible", "Cette publication ne permet pas de vérifier le chemin de commande."]
+        ? [tr("Motif indisponible"), tr("Cette publication ne permet pas de vérifier le chemin de commande.")]
         : timing === true
-          ? ["Temporisation imposée", "SmartPI signale une contrainte de durée minimale."]
+          ? [tr("Temporisation imposée"), tr("SmartPI signale une contrainte de durée minimale.")]
           : saturation
-            ? [saturation, "SmartPI publie l’état de saturation de la voie PI."]
+            ? [saturation, tr("SmartPI publie l’état de saturation de la voie PI.")]
             : timing === false
-              ? ["Temporisation non imposée", "Le drapeau de temporisation imposée est inactif."]
-              : ["Motif indisponible", "Cette publication ne renseigne pas la temporisation."];
+              ? [tr("Temporisation non imposée"), tr("Le drapeau de temporisation imposée est inactif.")]
+              : [tr("Motif indisponible"), tr("Cette publication ne renseigne pas la temporisation.")];
     const warning = route === "pi" && (timing === true || saturation !== null);
     const steps: readonly (readonly [ControlBlock, string, string | null, string])[] = route === "direct"
-      ? [[command, "Décision", directMode, "Voie directe"], [applied, "Sortie", "Appliquée", applied.value]]
-      : [[command, "Demande", route === "pi" ? "PI + anticipation" : "Demandée", command.value],
-          [limits, "Contraintes", "Limites et timing", route === "pi" ? limits.value : "Chemin non vérifié"],
-          [applied, "Sortie", "Appliquée", applied.value]];
+      ? [[command, tr("Décision"), directMode, tr("Voie directe")], [applied, tr("Sortie"), tr("Appliquée"), applied.value]]
+      : [[command, tr("Demande"), route === "pi" ? tr("PI + anticipation") : tr("Demandée"), command.value],
+          [limits, tr("Contraintes"), tr("Limites et timing"), route === "pi" ? limits.value : tr("Chemin non vérifié")],
+          [applied, tr("Sortie"), tr("Appliquée"), applied.value]];
     const quickBlocks = route === "pi" ? [temperature, setpoint, pi, ff, model] : [temperature, setpoint, model];
     const updated = this.diagnostic.lastUpdated;
     const time = updated ? new Date(updated) : null;
     const timestamp = this.diagnostic.available && time && Number.isFinite(time.valueOf())
-      ? html`${this.historical ? "Publication archivée" : "Dernière mise à jour du capteur"} : <time datetime=${time.toISOString()}>${new Intl.DateTimeFormat("fr-FR", {dateStyle: "short", timeStyle: "medium"}).format(time)}</time>`
-      : "Horodatage des données actuelles indisponible";
+      ? html`${this.historical ? tr("Publication archivée") : tr("Dernière mise à jour du capteur")} : <time datetime=${time.toISOString()}>${dateTimeFormat({dateStyle: "short", timeStyle: "medium"}).format(time)}</time>`
+      : tr("Horodatage des données actuelles indisponible");
     const positions = [
       [20, 20],
       [20, 155],
@@ -61,22 +62,22 @@ export class ControlDiagram extends LitElement {
     ];
     return html`<div class="intro">
         <div>
-          <span class="eyebrow">COMPRENDRE LA COMMANDE</span>
-          <h3>${this.historical ? "Le régulateur, à cette publication" : "Le régulateur, en direct"}</h3>
+          <span class="eyebrow">${tr("COMPRENDRE LA COMMANDE")}</span>
+          <h3>${this.historical ? tr("Le régulateur, à cette publication") : tr("Le régulateur, en direct")}</h3>
         </div>
         <span class="badge route-badge">${routeLabel}</span>
       </div>
       <p class="muted stamp">${timestamp}</p>
       <dl class="snapshot">
-        <div><dt>Température intérieure</dt><dd>${temperature.value}</dd><small>Mesure publiée</small></div>
-        <div><dt>Consigne filtrée</dt><dd>${setpoint.value}</dd><small>${view.bypass ? "Voie P contournée" : "Voie proportionnelle"}</small></div>
-        <div><dt>Commande demandée</dt><dd>${view.bypass ? "—" : command.value}</dd>
-          <small>${view.bypass ? "Voie PI contournée" : "Demande publiée"}</small></div>
-        <div><dt>Commande appliquée</dt><dd>${applied.value}</dd><small>Signal de commande</small></div>
+        <div><dt>${tr("Température intérieure")}</dt><dd>${temperature.value}</dd><small>${tr("Mesure publiée")}</small></div>
+        <div><dt>${tr("Consigne filtrée")}</dt><dd>${setpoint.value}</dd><small>${view.bypass ? tr("Voie P contournée") : tr("Voie proportionnelle")}</small></div>
+        <div><dt>${tr("Commande demandée")}</dt><dd>${view.bypass ? "—" : command.value}</dd>
+          <small>${view.bypass ? tr("Voie PI contournée") : tr("Demande publiée")}</small></div>
+        <div><dt>${tr("Commande appliquée")}</dt><dd>${applied.value}</dd><small>${tr("Signal de commande")}</small></div>
       </dl>
       <div class="work">
       <section class="route" aria-labelledby="route-title">
-        <h4 id="route-title">Chemin de commande</h4>
+        <h4 id="route-title">${tr("Chemin de commande")}</h4>
         <div class="note ${warning ? "warning" : ""}">
           <strong>${note[0]}</strong><p>${note[1]}</p>
         </div>
@@ -88,35 +89,35 @@ export class ControlDiagram extends LitElement {
               <small>${label}</small><strong>${title}</strong><span>${value}</span>
             </button></li>`)}
         </ol>
-        <div class="quick-blocks" role="group" aria-label="Signaux associés">
+        <div class="quick-blocks" role="group" aria-label="${tr("Signaux associés")}">
           ${quickBlocks.map((block) => html`<button type="button" aria-pressed=${block.id === chosen.id}
-            aria-controls="signal-inspector" @click=${() => select(block.id)}>${block.id === "ff" ? "Anticipation" : block.title}</button>`)}
+            aria-controls="signal-inspector" @click=${() => select(block.id)}>${block.id === "ff" ? tr("Anticipation") : block.title}</button>`)}
         </div>
       </section>
       <aside id="signal-inspector" aria-labelledby="signal-title">
-        <span class="eyebrow">INSPECTION DU SIGNAL</span>
+        <span class="eyebrow">${tr("INSPECTION DU SIGNAL")}</span>
         <h4 id="signal-title" aria-live="polite">${chosen.title} <span class="badge">${chosen.status}</span></h4>
         <p>${chosen.explanation}</p>
         <dl>
-          <div><dt>Valeur du bloc</dt><dd>${chosen.value}</dd>
-            ${this.expert ? html`<code>attributes.live.${chosen.path}</code>` : null}</div>
-          <div><dt>Motif ou contexte publié</dt><dd>${chosen.reason}</dd>
-            ${this.expert ? html`<code>attributes.live.${chosen.reasonPath}</code>` : null}</div>
+          <div><dt>${tr("Valeur du bloc")}</dt><dd>${chosen.value}</dd>
+            ${this.expert ? html`<code>${tr("attributes.live.")}${chosen.path}</code>` : null}</div>
+          <div><dt>${tr("Motif ou contexte publié")}</dt><dd>${chosen.reason}</dd>
+            ${this.expert ? html`<code>${tr("attributes.live.")}${chosen.reasonPath}</code>` : null}</div>
           ${view.detail(chosen, this.expert).map((row) => html`<div>
             <dt>${row.label}</dt><dd>${row.value}</dd>
-            ${this.expert ? html`<code>attributes.live.${row.path}</code>${row.reliability ? html`<code>Fiabilité · ${row.reliability}</code>` : null}` : null}
+            ${this.expert ? html`<code>${tr("attributes.live.")}${row.path}</code>${row.reliability ? html`<code>${tr("Fiabilité")} · ${row.reliability}</code>` : null}` : null}
           </div>`)}
         </dl>
-        ${chosen.status === "Contourné" ? html`<p class="muted">Ces valeurs décrivent un bloc hors du chemin actif.</p>` : nothing}
+        ${chosen.status === tr("Contourné") ? html`<p class="muted">${tr("Ces valeurs décrivent un bloc hors du chemin actif.")}</p>` : nothing}
       </aside>
       </div>
       <details class="full">
-        <summary>Schéma complet de la boucle</summary>
-        <p class="muted">Les flèches pleines montrent le chemin déclaré. Les pointillés représentent le retour de la mesure.</p>
+        <summary>${tr("Schéma complet de la boucle")}</summary>
+        <p class="muted">${tr("Les flèches pleines montrent le chemin déclaré. Les pointillés représentent le retour de la mesure.")}</p>
       <div class="diagram">
         <svg
           viewBox="0 0 880 415"
-          aria-label="Schéma logique de SmartPI"
+          aria-label="${tr("Schéma logique de SmartPI")}"
           role="group"
         >
           <defs>

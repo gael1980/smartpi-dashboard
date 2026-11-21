@@ -1,5 +1,6 @@
 import type {ObservationPoint} from "../utils/evidence";
 import {record, type HassLike, type Rec} from "../adapter";
+import {tr} from "../i18n";
 
 export type ObservatoryAction = "get" | "clear" | "bookmark_save" | "bookmark_delete" | "trial_start" | "trial_stop" | "trial_feedback" | "trial_delete" | "forecast_delete" | "receipt_delete" | "receipt_begin" | "receipt_finish";
 export interface ObservatoryConnection {
@@ -16,18 +17,18 @@ export interface OrphanRoom {entity_id: string; bookmarks: number; trials: numbe
 export class ObservatoryClient {
   constructor(private hass: HassLike & Partial<ObservatoryConnection>) {}
   async request(entityId: string | undefined, action: ObservatoryAction, payload: Rec = {}): Promise<unknown> {
-    if ((entityId === undefined ? action !== "get" || Object.keys(payload).length > 0 : !entityId.startsWith("sensor.")) || typeof this.hass.callWS !== "function") throw new Error("L’observatoire local n’est pas disponible dans cette connexion.");
+    if ((entityId === undefined ? action !== "get" || Object.keys(payload).length > 0 : !entityId.startsWith("sensor.")) || typeof this.hass.callWS !== "function") throw new Error(tr("L’observatoire local n’est pas disponible dans cette connexion."));
     let timer: ReturnType<typeof setTimeout> | undefined;
     try {
       return await Promise.race([this.hass.callWS<unknown>({type: "smartpi_dashboard/observatory", ...(entityId === undefined ? {} : {entity_id: entityId}), action, payload}),
-        new Promise<never>((_, reject) => {timer = setTimeout(() => reject(new Error(action === "get" ? "L’observatoire ne répond pas. Réessayez." : "Résultat non confirmé. Actualisez le carnet avant de réessayer.")), 8000);})]);
+        new Promise<never>((_, reject) => {timer = setTimeout(() => reject(new Error(action === "get" ? tr("L’observatoire ne répond pas. Réessayez.") : tr("Résultat non confirmé. Actualisez le carnet avant de réessayer."))), 8000);})]);
     } catch (error) {
       if (record(error) && typeof error.message === "string" && !(error instanceof Error)) throw new Error(error.message.slice(0, 300));
       throw error;
     } finally { clearTimeout(timer); }
   }
   static orphans(value: unknown): OrphanRoom[] {
-    if (!record(value) || !Array.isArray(value.orphans) || value.orphans.length > 32 || !value.orphans.every(r => record(r) && typeof r.entity_id === "string" && /^sensor\.[a-z0-9_]+$/.test(r.entity_id) && r.entity_id.length <= 255 && ["bookmarks","trials","forecasts","receipts","points"].every(key => Number.isSafeInteger(r[key]) && (r[key] as number) >= 0 && (r[key] as number) <= 1200))) throw new Error("Liste des carnets non reconnue. Vérifiez la version du composant.");
+    if (!record(value) || !Array.isArray(value.orphans) || value.orphans.length > 32 || !value.orphans.every(r => record(r) && typeof r.entity_id === "string" && /^sensor\.[a-z0-9_]+$/.test(r.entity_id) && r.entity_id.length <= 255 && ["bookmarks","trials","forecasts","receipts","points"].every(key => Number.isSafeInteger(r[key]) && (r[key] as number) >= 0 && (r[key] as number) <= 1200))) throw new Error(tr("Liste des carnets non reconnue. Vérifiez la version du composant."));
     return value.orphans as OrphanRoom[];
   }
   static room(value: unknown): ObservatoryRoom {
@@ -49,9 +50,9 @@ export class ObservatoryClient {
       ["unit","mode","climate_id","preset","window"].every(k=>p[k]===null || optional(p,k,text)) &&
       ["bound","safety","overpowering"].every(k=>p[k]===null || optional(p,k,v=>typeof v==="boolean")) && optional(p,"suspensions_observed_at",v=>v===null||time(v));
     if (record(value) && value.points !== undefined && (!Array.isArray(value.points) || value.points.length>1200 || !value.points.every(point)))
-      throw new Error("Points d’observation non reconnus.");
+      throw new Error(tr("Points d’observation non reconnus."));
     if (!record(value) || (value.current !== null && !record(value.current)) || !Object.entries(groups).every(([k, [limit, check]]) => Array.isArray(value[k]) && value[k].length <= limit && value[k].every(v => record(v) && check(v))))
-      throw new Error("Réponse de l’observatoire non reconnue. Rechargez après la mise à jour du composant.");
+      throw new Error(tr("Réponse de l’observatoire non reconnue. Rechargez après la mise à jour du composant."));
     return value as unknown as ObservatoryRoom;
   }
 }

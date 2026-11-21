@@ -4,7 +4,9 @@
 
 A native Home Assistant sidebar panel for SmartPI diagnostics, learning progress,
 Recorder charts and explicit temperature/preset selection. The dashboard UI is
-currently in French. Setup translations are provided in English and French.
+available in French and English. It follows the Home Assistant user language:
+French for French, English for every other language. Setup translations are
+provided in English and French.
 
 ## Preview
 
